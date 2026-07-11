@@ -1,9 +1,22 @@
 """Original SVG line-icon loader — emoji-free navigation iconography.
 
 Replaces every emoji in the nav rail / overlay menu / section headers with a
-real monochrome, ``currentColor`` SVG so the app reads as a professional
-NVIDIA-App neighbour rather than a terminal-emoji mock. Every icon is an
-ORIGINAL line drawing (no NVIDIA marks, no Nerd-Font/third-party glyph), MIT.
+real NVIDIA-green line SVG so the app reads as a professional NVIDIA-App
+neighbour rather than a terminal-emoji mock. Every icon is an ORIGINAL line
+drawing (no NVIDIA marks, no Nerd-Font/third-party glyph), MIT.
+
+The stroke color is pinned ``#76b900`` (NVIDIA green) **inside each SVG**,
+not via CSS ``currentColor``. ``Gtk.Image.new_from_file`` rasterises the SVG
+once at pixbuf-load time, outside any widget style context, so ``currentColor``
+resolves to black and the icon is invisible on the ``#0b0b0b`` sidebar. The
+symbolic-paintable route (``Gtk.SymbolicPaintable.new_for_file``) would re-color
+correctly BUT applies GTK's symbolic styling (``path { fill: <fg> !important }``),
+which force-fills our ``fill='none'`` outline art into solid shapes — the wrong
+look. Pinning green at the SVG source keeps the clean line-art AND renders
+deterministically today. The active row already denotes selection via its
+green left-border + ``#1a1a1a`` background + white label, so a constant-green
+icon reads as intentional, not a missed active state. The design-keeper owns
+the SVG art; keep ``stroke='#76b900'``.
 
 ``icon(name)`` resolves to ``icons/<name>.svg`` when shipped and falls back to
 ``icons/_placeholder.svg`` so the rail is never blank before the design-keeper

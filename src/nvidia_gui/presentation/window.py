@@ -118,9 +118,12 @@ class MainWindow(Gtk.ApplicationWindow):
         # bar, so it never depends on the divider's position.
         self._menubtn = Gtk.MenuButton()
         # The hamburger face is the design-keeper's "menu" SVG line-icon —
-        # NOT a "trigram" emoji glyph — honouring the no-emoji contract.
+        # NOT a "trigram" emoji glyph — honouring the no-emoji contract. The
+        # icon's stroke is pinned #76b900 in menu.svg itself (see icons.py):
+        # Gtk.Image.new_from_file rasterises the SVG once, at pixbuf-load time,
+        # with no widget style context — so CSS `color` can't reach the baked
+        # pixels. Pinning the green in-file is what makes it visible on #0b0b0b.
         face = icon("menu", size=20)
-        face.add_css_class("nvgui-overlay-toggle")
         self._menubtn.set_child(face)
         self._menubtn.set_tooltip_text("Navigate / hide sidebar")
         self._populate_overlay_menu()
