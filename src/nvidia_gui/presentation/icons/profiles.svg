@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- nvidia-gui nav icon: profiles (ORIGINAL line drawing; MIT). Two stacked
+     rounded cards offset diagonally -- the "deck of profile cards" abstraction
+     for the Profiles page. Distinct from dlss (diamonds, not rects). No brand
+     marks. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+  <rect x="5" y="5" width="13" height="10" rx="1.5"/>
+  <rect x="7" y="8" width="13" height="10" rx="1.5"/>
+  <line x1="10.5" y1="12.5" x2="16" y2="12.5"/>
+</svg>

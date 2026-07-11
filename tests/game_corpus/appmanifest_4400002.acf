@@ -1,0 +1,28 @@
+"AppState"
+{
+	"appid"		"4400002"
+	"Universe"		"1"
+	"name"		"Dust Protocol"
+	"StateFlags"		"4"
+	"installdir"		"DustProtocol"
+	"BytesToDownload"		"64000000000"
+	"BytesDownloaded"		"64000000000"
+	"BytesStaged"		"64000000000"
+	"TargetBuildID"		"16990022"
+	"AutoUpdateBehavior"		"0"
+	"InstalledDepots"
+	{
+		"4400003"		"64000000000"
+	}
+	"BuildID"		"16990022"
+	"LastUpdated"		"1738100000"
+	"SizeOnDisk"		"64120000000"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

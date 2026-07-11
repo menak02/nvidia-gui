@@ -1,0 +1,28 @@
+"AppState"
+{
+	"appid"		"4400001"
+	"Universe"		"1"
+	"name"		"Titan Sieve"
+	"StateFlags"		"4"
+	"installdir"		"TitanSieve"
+	"BytesToDownload"		"88000000000"
+	"BytesDownloaded"		"88000000000"
+	"BytesStaged"		"88000000000"
+	"TargetBuildID"		"16990011"
+	"AutoUpdateBehavior"		"0"
+	"InstalledDepots"
+	{
+		"4400002"		"88000000000"
+	}
+	"BuildID"		"16990011"
+	"LastUpdated"		"1738000000"
+	"SizeOnDisk"		"88120000000"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

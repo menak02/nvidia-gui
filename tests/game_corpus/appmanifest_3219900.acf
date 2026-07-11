@@ -1,0 +1,29 @@
+"AppState"
+{
+	"appid"		"3219900"
+	"Universe"		"1"
+	"name"		"Mind Blocks"
+	"StateFlags"		"4"
+	"installdir"		"MindBlocks"
+	"BytesToDownload"		"184320000"
+	"BytesDownloaded"		"184320000"
+	"BytesStaged"		"184320000"
+	"TargetBuildID"		"9988776"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"InstalledDepots"
+	{
+		"3219901"		"184320000"
+	}
+	"BuildID"		"9988776"
+	"LastUpdated"		"1736000000"
+	"SizeOnDisk"		"184320000"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

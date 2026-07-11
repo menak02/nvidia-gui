@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- nvidia-gui nav icon: rtx (ORIGINAL line drawing; MIT). Six rays radiating
+     from a central point -- the "light / rays from a point" abstraction for
+     ray tracing. Distinct from the settings cog (which has an enclosing ring)
+     -- this has spokes from a center dot only. No brand marks. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+  <line x1="15.2" y1="12" x2="19.2" y2="12"/>
+  <line x1="13.6" y1="9.23" x2="15.6" y2="5.77"/>
+  <line x1="10.4" y1="9.23" x2="8.4" y2="5.77"/>
+  <line x1="8.8" y1="12" x2="4.8" y2="12"/>
+  <line x1="10.4" y1="14.77" x2="8.4" y2="18.23"/>
+  <line x1="13.6" y1="14.77" x2="15.6" y2="18.23"/>
+  <circle cx="12" cy="12" r="1.3"/>
+</svg>

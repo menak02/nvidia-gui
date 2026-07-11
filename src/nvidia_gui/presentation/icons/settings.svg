@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- nvidia-gui nav icon: settings (ORIGINAL line drawing; MIT). A cog -- a
+     wheel with eight teeth and a hub -- the classic "settings" abstraction.
+     Distinct from drivers (a screwdriver, not a gear). No brand marks. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="4.5"/>
+  <circle cx="12" cy="12" r="1.4"/>
+  <line x1="16.5" y1="12" x2="19" y2="12"/>
+  <line x1="15.18" y1="8.82" x2="16.95" y2="7.05"/>
+  <line x1="12" y1="7.5" x2="12" y2="5"/>
+  <line x1="8.82" y1="8.82" x2="7.05" y2="7.05"/>
+  <line x1="7.5" y1="12" x2="5" y2="12"/>
+  <line x1="8.82" y1="15.18" x2="7.05" y2="16.95"/>
+  <line x1="12" y1="16.5" x2="12" y2="19"/>
+  <line x1="15.18" y1="15.18" x2="16.95" y2="16.95"/>
+</svg>

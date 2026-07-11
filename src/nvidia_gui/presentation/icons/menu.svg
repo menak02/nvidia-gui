@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- nvidia-gui nav icon: menu (ORIGINAL line drawing; MIT). Three stacked
+     horizontal lines -- the hamburger abstraction for the overlay menu toggle.
+     Distinct from graphics (which carries slider knobs); this is plain lines.
+     No brand marks. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+  <line x1="3" y1="7" x2="21" y2="7"/>
+  <line x1="3" y1="12" x2="21" y2="12"/>
+  <line x1="3" y1="17" x2="21" y2="17"/>
+</svg>

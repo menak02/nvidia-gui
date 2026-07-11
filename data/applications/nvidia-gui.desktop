@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=NVIDIA-GUI
+GenericName=GPU Control Center
+Comment=Linux NVIDIA GPU Control Center — Wayland/X11-native, DLSS overrides, per-game launch injection
+Comment[en]=Linux NVIDIA GPU Control Center — Wayland/X11-native, DLSS overrides, per-game launch injection
+Exec=nvidia-gui
+Icon=nvidia-gui
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=nvidia;gpu;graphics;dlss;dlaa;gsync;rtx;freesync;vrr;proton;wine;gaming;kernel;
+StartupNotify=true
+SingleMainWindow=true

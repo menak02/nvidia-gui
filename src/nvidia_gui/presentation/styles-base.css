@@ -1,0 +1,284 @@
+/*
+ * NVIDIA-GUI -- GTK4 base theme (NVIDIA brand, Wayland-crash-safe).
+ * DESIGN PRINCIPLE: solid colours, 2px angular radii, hairline borders, one
+ * green accent. NO gradients, NO blur, NO shadows, NO translucent overlays --
+ * these trigger NVIDIA compositor stalls on Wayland, and NVIDIA's own design
+ * language doesn't need them anyway. This file is the STATIC layer only; every
+ * motion rule lives in styles-effects.css (gated by the nvgui-motion-* tier
+ * class) so a single class swap re-scopes all effects with no theme reload.
+ */
+
+/* =========================================================== Global */
+window {
+    background-color: #000000;
+}
+
+* {
+    color: #f2f2f2;
+    font-family: "NVIDIA Sans", Inter, "Helvetica Neue", Roboto, sans-serif;
+    font-size: 14px;
+    background: transparent;
+}
+
+/* =========================================================== Sidebar */
+.nvgui-sidebar {
+    background-color: #0b0b0b;
+    border-right: 1px solid #262626;
+    padding: 18px 10px;
+}
+
+.nvgui-nav-title {
+    color: #76b900;
+    font-size: 1.4rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    padding: 4px 10px 14px 10px;
+}
+
+.nvgui-nav-subtitle {
+    color: #6a6a6a;
+    font-size: 0.82rem;
+    padding: 0 10px 16px 10px;
+}
+
+.nvgui-nav-btn {
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    padding: 11px 14px;
+    color: #c8c8c8;
+    font-weight: 600;
+    border-left: 3px solid transparent;
+}
+
+.nvgui-nav-btn:hover {
+    background: #161616;
+    color: #ffffff;
+}
+
+.nvgui-nav-btn.active {
+    background: #1a1a1a;
+    color: #ffffff;
+    border-left: 3px solid #76b900;
+}
+
+/* =========================================================== Cards */
+.nvgui-card {
+    background: #141414;
+    border: 1px solid #262626;
+    border-radius: 2px;
+    padding: 18px;
+    margin: 10px 0;
+}
+
+.nvgui-card-title {
+    color: #ffffff;
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #1f1f1f;
+}
+
+.nvgui-card-subtle {
+    color: #7a7a7a;
+    font-size: 0.84rem;
+    margin-bottom: 10px;
+}
+
+/* The NVIDIA signature: a solid 11px green square at a card's corner. Pure
+ * CSS box, no filter/gradient. Drawn by .corner-accent in a toolbar row. */
+.nvgui-corner {
+    background: #76b900;
+    min-width: 11px;
+    min-height: 11px;
+    border-radius: 2px;
+}
+
+.nvgui-card-header {
+    border-bottom: 1px solid #1f1f1f;
+    padding-bottom: 6px;
+    margin-bottom: 10px;
+}
+
+/* =========================================================== Rows */
+.nvgui-row {
+    padding: 7px 0;
+}
+
+.nvgui-row-label {
+    color: #d2d2d2;
+    font-weight: 600;
+}
+
+.nvgui-row-value {
+    color: #9a9a9a;
+    font-size: 0.92rem;
+}
+
+.nvgui-row-value.accent {
+    color: #9ad815;
+    font-weight: 700;
+}
+
+/* =========================================================== Buttons */
+button {
+    background: #1c1c1c;
+    border: 1px solid #2e2e2e;
+    border-radius: 2px;
+    padding: 9px 18px;
+    color: #f2f2f2;
+    font-weight: 600;
+}
+
+button:hover {
+    background: #282828;
+    border-color: #76b900;
+    color: #ffffff;
+}
+
+button:active {
+    background: #111;
+}
+
+button:disabled {
+    background: #121212;
+    color: #5a5a5a;
+    border-color: #1e1e1e;
+}
+
+.nvgui-btn-primary {
+    background: #76b900;
+    color: #0b0b0b;
+    border: none;
+    font-weight: 700;
+}
+
+.nvgui-btn-primary:hover {
+    background: #84d10a;
+    color: #000000;
+}
+
+.nvgui-btn-ghost {
+    background: transparent;
+    color: #9ad815;
+    border: 1px solid #3a4a1a;
+}
+
+.nvgui-btn-ghost:hover {
+    background: #162012;
+    color: #bdf33b;
+}
+
+.nvgui-btn-danger {
+    background: transparent;
+    color: #f06a6a;
+    border: 1px solid #4a1f1f;
+}
+
+.nvgui-btn-danger:hover {
+    background: #241010;
+    color: #ff8080;
+}
+
+/* =========================================================== Switches */
+switch {
+    background: #1d1d1d;
+    border: 1px solid #2e2e2e;
+    border-radius: 2px;
+}
+
+switch:checked {
+    background: #2c3a12;
+    border-color: #76b900;
+}
+
+switch slider {
+    background: #6a6a6a;
+    border-radius: 2px;
+}
+
+switch:checked slider {
+    background: #76b900;
+}
+
+/* =========================================================== Inputs */
+entry {
+    background: #0e0e0e;
+    border: 1px solid #2e2e2e;
+    border-radius: 2px;
+    padding: 8px 10px;
+    color: #f2f2f2;
+}
+
+entry:focus {
+    border-color: #76b900;
+}
+
+entry:disabled {
+    color: #5a5a5a;
+    background: #121212;
+}
+
+combobox button.combo {
+    background: #0e0e0e;
+    border: 1px solid #2e2e2e;
+    border-radius: 2px;
+}
+
+/* =========================================================== Misc */
+separator {
+    background: #1f1f1f;
+    min-height: 1px;
+    margin: 6px 0;
+}
+
+scrollbar {
+    min-width: 8px;
+    min-height: 8px;
+}
+
+scrollbar slider {
+    background: #2a2a2a;
+    border-radius: 2px;
+    min-width: 8px;
+}
+
+scrollbar slider:hover {
+    background: #3a3a3a;
+}
+
+.nvgui-pill {
+    background: #162012;
+    color: #9ad815;
+    border: 1px solid #2c3a12;
+    border-radius: 2px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.nvgui-pill.off {
+    background: #1a1a1a;
+    color: #7a7a7a;
+    border-color: #2e2e2e;
+}
+
+.nvgui-muted {
+    color: #6a6a6a;
+}
+
+.nvgui-status-dot {
+    min-width: 9px;
+    min-height: 9px;
+    border-radius: 9px;
+    background: #76b900;
+}
+
+.nvgui-status-dot.warn {
+    background: #d6a100;
+}
+
+.nvgui-status-dot.off {
+    background: #4a4a4a;
+}

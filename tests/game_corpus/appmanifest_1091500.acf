@@ -1,0 +1,34 @@
+"AppState"
+{
+	"appid"		"1091500"
+	"Universe"		"1"
+	"name"		"Cyberpunk 2077"
+	"StateFlags"		"4"
+	"installdir"		"Cyberpunk 2077"
+	"BytesToDownload"		"75223390464"
+	"BytesDownloaded"		"75223390464"
+	"BytesStaged"		"75223390464"
+	"TargetBuildID"		"14211566"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"ScheduledAutoUpdate"		"0"
+	"InstalledDepots"
+	{
+		"519780"		"7053177388"
+		"519781"		"43144488475"
+		"519782"		"25051129601"
+	}
+	"StagedReadyToDeploy"		"0"
+	"BuildID"		"14211566"
+	"LastUpdated"		"1737500000"
+	"SizeOnDisk"		"75321756160"
+	"UserConfig"
+	{
+		"language"		"english"
+		"betakey"		"public"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

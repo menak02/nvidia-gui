@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- nvidia-gui nav icon: drivers (ORIGINAL line drawing; MIT). A screwdriver
+     silhouette -- a rounded handle, a shaft, and a flat tip -- the "driver
+     tool" abstraction. (The brief's steering suggestion was "cog/gear"; a
+     screwdriver was chosen so the icon is distinct from the settings gear
+     below -- a cog + a screwdriver read as two different glyphs instead of two
+     near-identical gears in the 10-icon nav set.) No brand marks. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+  <rect x="9" y="3.5" width="6" height="6.5" rx="1.5"/>
+  <line x1="12" y1="10" x2="12" y2="18.5"/>
+  <line x1="10.3" y1="18.5" x2="13.7" y2="18.5"/>
+</svg>

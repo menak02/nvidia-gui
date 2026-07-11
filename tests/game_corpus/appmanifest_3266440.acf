@@ -1,0 +1,29 @@
+"AppState"
+{
+	"appid"		"3266440"
+	"Universe"		"1"
+	"name"		"Phantom Frontier"
+	"StateFlags"		"4"
+	"installdir"		"PhantomFrontier"
+	"BytesToDownload"		"120000000000"
+	"BytesDownloaded"		"120000000000"
+	"BytesStaged"		"0"
+	"TargetBuildID"		"15882219"
+	"AutoUpdateBehavior"		"1"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"InstalledDepots"
+	{
+		"3266441"		"120000000000"
+	}
+	"BuildID"		"15882219"
+	"LastUpdated"		"0"
+	"SizeOnDisk"		"0"
+	"UserConfig"
+	{
+		"language"		"english"
+	}
+	"MountedConfig"
+	{
+		"language"		"english"
+	}
+}

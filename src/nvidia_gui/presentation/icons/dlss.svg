@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- nvidia-gui nav icon: dlss (ORIGINAL line drawing; MIT). Two layered,
+     offset diamonds -- the "stacked layers / upscaling" abstraction for the
+     DLSS page (Deep Learning Super Sampling). Distinct from profiles (rects,
+     not diamonds). No brand marks. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+     fill="none" stroke="currentColor" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 3 L21 12 L12 21 L3 12 Z"/>
+  <path d="M14 7 L19 12 L14 17 L9 12 Z"/>
+</svg>

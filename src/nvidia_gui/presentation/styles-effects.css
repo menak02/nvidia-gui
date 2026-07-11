@@ -1,0 +1,106 @@
+/*
+ * NVIDIA-GUI -- motion-only effects (Wayland-compositor-stall-safe).
+ * DESIGN PRINCIPLE: effects are MOTION ONLY. NO gradients, NO box-shadow, NO
+ * drop-shadow, NO filter:blur, NO translucent opacity overlays -- these stall
+ * the NVIDIA Wayland compositor. Only `transition:` and `animation:`/`@keyframes`
+ * are used, which GTK4 renders natively (verified /gnome/gtk: the `transform`
+ * translate/scale functions, the `transition` shorthand, and `animation`/
+ * `@keyframes` are all supported).
+ *
+ * Every effect is gated by the window's motion-tier CSS class, so a single
+ * class swap on the root Gtk.Window re-scopes ALL motion -- no theme reload.
+ * The window-keeper sets exactly one of:
+ *   nvgui-motion-full     -> full transitions + staggered card rise + ambient dot pulse
+ *   nvgui-motion-minimal  -> <=60ms transitions only (no keyframes / ambient)
+ *   nvgui-motion-off      -> no transitions, no animations (static base only)
+ */
+
+/* =========================================================== FULL tier */
+
+/* Button + switch colour shifts animate in (150ms ease). The end-state colours
+ * live in styles-base.css; only the easing is motion. */
+window.nvgui-motion-full button {
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+window.nvgui-motion-full switch {
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+window.nvgui-motion-full switch slider {
+    transition: background-color 150ms ease;
+}
+
+/* Navbar hover-glow: smooth the background/border/colour shift on hover and on
+ * the active rail highlight. NO box-shadow / blur -- the existing solid colours
+ * easing in IS the glow. */
+window.nvgui-motion-full .nvgui-nav-btn {
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+/* Save toast: a Gtk.Revealer's reveal, with the CSS transition on the
+ * revealer node gated so the motion tier can make it instant (off/minimal). */
+window.nvgui-motion-full revealer {
+    transition: background-color 200ms ease, color 200ms ease;
+}
+
+/* Staggered card entrance: each card rises 8px into place over ~300ms. The
+ * nth-child rules stagger animation-delay so a page reads as a cascade, not a
+ * single flash. `both` fill holds the 8px offset through the delay then pins
+ * the resting state (0) afterwards. */
+window.nvgui-motion-full .nvgui-card {
+    animation: nvgui-rise 300ms ease-out both;
+}
+
+window.nvgui-motion-full .nvgui-card:nth-child(1) { animation-delay: 0ms; }
+window.nvgui-motion-full .nvgui-card:nth-child(2) { animation-delay: 40ms; }
+window.nvgui-motion-full .nvgui-card:nth-child(3) { animation-delay: 80ms; }
+window.nvgui-motion-full .nvgui-card:nth-child(4) { animation-delay: 120ms; }
+window.nvgui-motion-full .nvgui-card:nth-child(5) { animation-delay: 160ms; }
+window.nvgui-motion-full .nvgui-card:nth-child(6) { animation-delay: 200ms; }
+window.nvgui-motion-full .nvgui-card:nth-child(7) { animation-delay: 240ms; }
+window.nvgui-motion-full .nvgui-card:nth-child(8) { animation-delay: 280ms; }
+
+/* Ambient GPU-status dot: a subtle scale+opacity breathe on the live dot only.
+ * The opacity is on a single solid 9px indicator (not an overlay/backdrop),
+ * so it stays compositor-cheap. */
+window.nvgui-motion-full .nvgui-status-dot {
+    animation: nvgui-pulse 2200ms ease-in-out infinite;
+}
+
+@keyframes nvgui-rise {
+    from { transform: translate(0px, 8px); }
+    to   { transform: translate(0px, 0px); }
+}
+
+@keyframes nvgui-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.82); }
+}
+
+/* =========================================================== MINIMAL tier
+ * <=60ms transitions give snappy feedback with no theater; keyframes / ambient
+ * breathing are disabled (animation: none on all descendants as a guard). */
+window.nvgui-motion-minimal button,
+window.nvgui-motion-minimal switch,
+window.nvgui-motion-minimal switch slider,
+window.nvgui-motion-minimal .nvgui-nav-btn {
+    transition: background-color 50ms ease, border-color 50ms ease, color 50ms ease;
+}
+
+window.nvgui-motion-minimal revealer {
+    transition: background-color 60ms ease, color 60ms ease;
+}
+
+window.nvgui-motion-minimal * {
+    animation: none;
+}
+
+/* =========================================================== OFF tier
+ * All motion disabled -- the base stylesheet's static colours stand alone and
+ * hover/active changes apply instantly. Explicit so a stray transition can
+ * never leak into the reduced-motion path. */
+window.nvgui-motion-off * {
+    transition: none;
+    animation: none;
+}

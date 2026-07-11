@@ -1,0 +1,4 @@
+# PhantomFrontier install dir fixture: exists on disk but contains NO
+# nvngx_dlss.dll / nvapi64.dll (binaries absent). Simulates the
+# "installed entry, game not downloaded" / "no NVIDIA DLLs present" case
+# for the install-dir DLL probe tier of feature detection.

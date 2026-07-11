@@ -1,0 +1,37 @@
+#!/bin/sh
+# nvidia-gui privileged helper — installed to /usr/libexec/nvidia-gui-apply-modprobe.
+#
+# Invoked via pkexec from the nvidia-gui app to install a STAGED modprobe.d
+# fragment onto /etc/modprobe.d/nvidia-gui.conf. pkexec has already authenticated
+# the caller through the polkit action `org.mena.nvidia-gui.write-kernel-params`
+# (defined by data/polkit/org.mena.nvidia-gui.policy), so this script takes
+# NO password and must NOT prompt. It is intentionally a tiny, auditable shim.
+#
+# Usage: nvidia-gui-apply-modprobe <staged-conf-path>
+#
+# Safety: we refuse to install a file that does not look like our managed
+# content (must contain the modeset base line), so a misuse/typo cannot blank
+# an unrelated module config.
+
+set -eu
+
+DEST="/etc/modprobe.d/nvidia-gui.conf"
+SRC="${1:-}"
+
+if [ -z "$SRC" ] || [ ! -f "$SRC" ]; then
+    echo "nvidia-gui-apply-modprobe: usage: $0 <staged-conf>" >&2
+    exit 2
+fi
+
+# only accept our own managed content — defense-in-depth against misuse
+if ! grep -q '^options nvidia_drm modeset=1' "$SRC"; then
+    echo "nvidia-gui-apply-modprobe: refusing — staged file is not nvidia-gui-managed modprobe content" >&2
+    exit 3
+fi
+
+umask 022
+cp -- "$SRC" "$DEST"
+chmod 0644 "$DEST"
+chown root:root "$DEST" 2>/dev/null || true   # best-effort; some setups are rootless
+rm -f -- "$SRC"
+echo OK

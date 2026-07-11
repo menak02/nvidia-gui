@@ -1,0 +1,27 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+
+# --- Local tooling indices / session state (machine-generated, not source) ---
+.codegraph/
+.tailtest/
+
+# --- Secrets & sensitive runtime state (NEVER commit) ---
+.env
+.env.*
+*.pem
+*.key
+*.sock
+
+# --- Backups / editor cruft (revert paths live in ~/.cache, not the repo) ---
+*.bak
+*.swp
+*.swo
+*~
+.DS_Store

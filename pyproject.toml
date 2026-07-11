@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nvidia-gui"
+version = "1.0.0"
+description = "Linux NVIDIA GPU Control Center — Wayland/X11 native, DLSS overrides, per-game launch injection"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [{name = "mena"}]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: GTK",
+    "Environment :: Wayland",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+# Zero non-stdlib deps except PyGObject (gi). TOML read uses stdlib tomllib;
+# TOML write uses our own serializer. pynvml/psutil are NOT required — we use
+# nvidia-smi (always present) and stdlib.
+dependencies = ["PyGObject>=3.42"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4.0", "ruff>=0.1.0"]
+
+[project.scripts]
+nvidia-gui = "nvidia_gui.presentation.app:main"
+
+# When installed via pip, the ``nvidia_gui`` package is found automatically.
+# The flat ``main.py`` / ``config_manager.py`` shims are kept for the existing
+# shell-installed aliases and for direct ``python3 src/main.py`` launches.
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["nvidia_gui*"]
+
+# styles-base.css + styles-effects.css live next to theme.py and are loaded by
+# pathlib at runtime; bundle them so a non-editable `pip install .` wheel still finds them.
+[tool.setuptools.package-data]
+nvidia_gui = ["presentation/*.css", "presentation/icons/*.svg", "assets/*.toml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

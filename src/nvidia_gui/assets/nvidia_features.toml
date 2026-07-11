@@ -1,0 +1,98 @@
+# nvidia-gui bundled feature baseline — the OFFLINE FLOOR of per-game NVIDIA
+# feature detection. Read by adapters.feature_detection; merged UNDER a user
+# override and UNDER an online community-DB lookup, ABOVE install-dir/prefix
+# DLL probes. Values are best-known-CONSERVATIVE: a feature is set true here
+# only when reasonably confident, so the bundled floor can't silently claim a
+# game supports a feature it doesn't (the old unconditional-toggle bug). The
+# online DB + the install-dir DLL probe refine these at runtime, and anything
+# not listed simply falls through to DLL probes / UNKNOWN.
+#
+# Schema:  [[games]]  appid=< steam appid string >
+#                      dlss_sr=<bool>  dlss_fg=<bool>  reflex=<bool>  rt=<bool>
+#                      note="<optional>"
+
+[[games]]
+appid = "1091500"   # Cyberpunk 2077
+dlss_sr = true
+dlss_fg = true
+reflex = true
+rt = true
+note = "Path tracing + DLSS 3/4 frame generation + Reflex."
+
+[[games]]
+appid = "2169040"   # Alan Wake 2
+dlss_sr = true
+dlss_fg = true
+reflex = true
+rt = true
+note = "Path tracing + DLSS 3 FG + Reflex."
+
+[[games]]
+appid = "2358720"   # Black Myth: Wukong
+dlss_sr = true
+dlss_fg = true
+reflex = true
+rt = true
+
+[[games]]
+appid = "1627720"   # Lies of P
+dlss_sr = true
+dlss_fg = true
+reflex = true
+rt = true
+note = "DLSS 4 added frame gen; path-tracing patch."
+
+[[games]]
+appid = "2420110"   # Monster Hunter Wilds
+dlss_sr = true
+dlss_fg = true
+reflex = true
+rt = true
+
+[[games]]
+appid = "1145350"   # Hades II
+dlss_sr = true
+dlss_fg = true
+reflex = true
+rt = false
+note = "DLSS-SR + frame gen (no RT)."
+
+[[games]]
+appid = "2163050"   # Horizon Forbidden West
+dlss_sr = true
+dlss_fg = true
+reflex = false
+rt = false
+note = "DLSS-SR + FG (DLSS4 update); no Reflex/RT."
+
+[[games]]
+appid = "990080"    # Hogwarts Legacy
+dlss_sr = true
+dlss_fg = true
+reflex = false
+rt = false
+note = "DLSS-SR + FG; no RT/Reflex."
+
+[[games]]
+appid = "1174180"   # Red Dead Redemption 2
+dlss_sr = true
+dlss_fg = false
+reflex = false
+rt = false
+note = "DLSS-SR only (no FG/Reflex/RT on PC)."
+
+[[games]]
+appid = "2680930"   # Persona 3 Reload
+dlss_sr = true
+dlss_fg = false
+reflex = true
+rt = false
+note = "DLSS-SR + Reflex; no FG/RT."
+
+[[games]]
+appid = "1888930"   # The Last of Us Part I
+dlss_sr = true
+dlss_fg = false
+reflex = false
+rt = false
+note = "DLSS-SR only."

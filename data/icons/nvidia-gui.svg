@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- nvidia-gui app icon: black tile, green accent square + stylised angular "eye".
+       Kept deliberately flat (solid fills, no gradients/shadows) to match the GTK4
+       crash-safe theme contract for the NVIDIA+Wayland compositor. -->
+  <rect x="4" y="4" width="120" height="120" rx="18" fill="#0b0b0b" stroke="#262626" stroke-width="2"/>
+  <rect x="86" y="22" width="20" height="20" rx="3" fill="#76b900"/>
+  <!-- a two-segment stylised eye, evoking "GPU watching the workload" -->
+  <path d="M28 70 C46 50 82 50 100 70 C82 90 46 90 28 70 Z" fill="#141414" stroke="#76b900" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="64" cy="70" r="15" fill="#76b900"/>
+  <circle cx="64" cy="70" r="6" fill="#0b0b0b"/>
+</svg>
