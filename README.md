@@ -1,235 +1,135 @@
-# NVIDIA-GUI
+# nvidia-gui
 
-**Linux NVIDIA GPU Control Center** - A Linux-native alternative to the Windows NVIDIA App, featuring DLSS override support, NVAPI injection, and Wayland/X11 auto-detection.
+A Linux-native, open-source alternative to the Windows NVIDIA App — GTK4 + Python
+(PyGObject), for Wayland and X11. It bundles the per-game feature gating, DLSS
+version swapping, and NVAPI launch injection that Windows users get from NVIDIA's
+own app, behind a crash-safe, pure-GTK4 dark theme tuned for compositor stability.
 
-![NVIDIA-GUI Dashboard](https://raw.githubusercontent.com/mena/Linux-NVIDIA-App/main/screenshots/nvidia-gui-dashboard.png)
+> Not affiliated with NVIDIA Corporation. "NVIDIA", "GeForce", "DLSS", "RTX",
+> "Reflex", and "NVAPI" are trademarks of NVIDIA Corporation, used here only as
+> nominative references to the hardware and software this tool interoperates
+> with. This project is independent and unendorsed.
 
-## 🎯 Features
+## Architecture
 
-### Core Functionality
-- **DLSS Override Support** - Swap DLSS versions for Proton/Wine games via environment variables
-- **NVAPI Injection** - Automatically inject `PROTON_ENABLE_NVAPI=1` and `DXVK_ENABLE_NVAPI=1` for Vulkan/DX12 games
-- **Wayland & X11 Auto-Detection** - Works seamlessly on both display servers (advantage over Windows App)
-- **Fintech/Web3 Dark Mode UI** - Aurora glow effects, glassmorphism, and neon purple accents
-- **XDG Compliant** - Follows Linux desktop standards automatically
+Hexagonal (ports-and-adapters), so the UI owns no driver or I/O knowledge and
+every external effect is mockable in tests:
 
-### Dashboard Features
-- Real-time status indicator with display server detection
-- DLSS override global toggle (configurable in TOML)
-- NVAPI settings panel showing current environment variables
-- Quick actions: Scan Games, Refresh Config
+```
+domain          pure models + services — no I/O, no gi, no subprocess
+application     port interfaces (ABCs) + UseCases facade
+adapters        filesystem / subprocess / Steam / NVIDIA implementations
+presentation    GTK4 widgets + views — imports ZERO adapters
+composition_root   wires every concrete port together
+```
 
-### System Tray Daemon
-- System tray icon for quick access
-- IPC socket at `/run/user/{uid}/nvapp.sock` (108-char limit safe)
-- Auto-start support via systemd (future)
+The invariant "presentation imports no adapters" is checked by the test suite.
 
-## 🚀 Installation
+## Features
+
+**Per-game feature detection** — DLSS-SR, Frame Generation, Reflex, and RT are
+gated per game through a confidence-tiered pipeline that never lies:
+
+1. user override (persisted)
+2. optional online community DB (`NVIDIA_GUI_FEATURE_DB_URL`; opt-in,
+   offline-graceful, default-off so curated results stay deterministic)
+3. bundled curated DB (`src/nvidia_gui/assets/nvidia_features.toml`;
+   Cyberpunk 2077, appid 1091500, is the pinned example)
+4. install-directory DLL probe
+5. Steam prefix DLL probe
+6. UNKNOWN — detection that has not determined support yet, surfaced as a
+   "not yet detected" hint rather than a false "unsupported"
+
+Unsupported features are dimmed with an explicit override chip, so a mis-detection
+never silently hides a working feature.
+
+**DLSS version management** — a canonical DLSS page hosts the single Streamline
+download (no duplicate buttons), a per-version cache, and a per-game physical DLL
+swap with automatic `.nvagogui.orig` backup and clean revert. Detected DLSS kinds:
+`dlss`, `dlssd`, `dlssg`, `low_latency_vk`, `deepdvc`.
+
+**Managed launch injection** — once per game (idempotent, user options preserved)
+an env file is wired into Steam's `localconfig.vdf` as
+`source "<env>" 2>/dev/null; %command%`. The app then edits the env file freely:
+`NVAPI_DLSS_*` presets, `PROTON_ENABLE_NVAPI`, `DXVK_ENABLE_NVAPI`, and friends.
+State lives under `~/.cache/nvidia-gui/` — not the ephemeral `/run/user/$UID`.
+
+**Settings** — per-game profiles, read-only driver status, and kernel-module
+parameter writes through a sudo-elevated install guarded by a polkit action
+(`org.mena.nvidia-gui.write-kernel-params`).
+
+**Motion effects tier** — `full` (default), `minimal`, and `off`, gated by the
+`presentation.animations` setting. Both base and effects stylesheets load once;
+the tier is chosen by a single CSS class on the root window (no reload, no
+flicker). Motion only — no gradients, blur, shadows, or translucent overlays.
+
+**Navigation** — nine pages: Dashboard, Games, Graphics, Display, Drivers, RTX,
+Profiles, DLSS, Settings. Original SVG line-icons throughout (no emoji, no
+trademarked NVIDIA logo).
+
+## Design language
+
+NVIDIA green (`#76b900`) on near-black (`#000`, `#0b0b`, `#141414`), 2px angular
+radii, 1px hairline borders, a single accent. Solid fills only — no gradients,
+blur, shadows, or translucent overlays, which stall the NVIDIA compositor on
+Wayland. The theme splits into `styles-base.css` (always on, with an in-memory
+crash-safe fallback) and `styles-effects.css` (motion-only, silently skipped if
+absent).
+
+## Requirements
+
+- Linux, GTK 4 (PyGObject 4.x); tested on the NVIDIA open kernel module
+  (610.43.03, RTX 5070)
+- Steam for the launch-injection and game-library adapters
+- (optional) polkit for kernel-parameter writes; mangohud for the overlay adapter
+
+## Run
 
 ```bash
-# Clone or download the repository
-cd /path/to/nvidia-gui
-
-# Run the installer
-bash install.sh
+PYTHONPATH=src python3 src/main.py
 ```
 
-The installer will:
-1. Create XDG-compliant directory structure
-2. Deploy default configuration (TOML)
-3. Create JSON schema for validation
-4. Generate desktop entry and appstream metadata
-5. Add exec aliases to your shell config
+## Test
 
-## 🎮 DLSS Override Usage
+Headless suite (no pytest dependency):
 
-### Enable Global Override
-Edit your config file:
-```toml
-[dlss]
-global_override = true  # Enable this to use DLSS overrides globally
-```
-
-### Scan for Games
-Click the "Scan Games" button in the dashboard. The app will automatically detect games in:
-- `~/.local/share/Steam/steamapps/common`
-- `/usr/games`
-- Lutris prefixes (if installed)
-
-### Environment Variables Applied
-When you enable DLSS overrides, the following environment variables are applied to Proton/Wine games:
 ```bash
-export PROTON_ENABLE_NVAPI=1
-export DXVK_ENABLE_NVAPI=1
-export VKD3D_CONFIG=dxr11  # For Vulkan raytracing
+python3 tests/test_services.py        # 34 green; Cyberpunk 1091500 is the detection baseline
 ```
 
-## 🔧 Configuration
+Five-second smoke (expect rc 124, four INFO lines, zero GTK warnings):
 
-### Default Config File
-```toml
-[app]
-name = "NVIDIA-GUI"
-version = "1.0.0"
-debug_mode = false
-
-[overlay]
-enabled = true
-opacity = 0.8
-color_scheme = "dark-purple"
-
-[stats]
-interval_ms = 100
-collect_gpu_stats = true
-log_to_file = false
-
-[daemon]
-socket_path = "/run/user/{uid}/nvapp.sock"
-auto_start = true
-minimize_to_tray = true
-
-[dlss]
-cache_enabled = true
-auto_update = false
-preferred_version = null
-global_override = false  # Enable this to use DLSS overrides globally
-
-[nvapi]
-enabled = true
-proton_enable_nvapi = true  # Inject PROTON_ENABLE_NVAPI=1 for Proton games
-dxvk_enable_nvapi = true   # Inject DXVK_ENABLE_NVAPI=1 for Vulkan games
-vkd3d_config = null  # dxr11 for Vulkan raytracing
-```
-
-### Configuration Options
-| Section | Key | Description |
-|---------|-----|-------------|
-| `dlss` | `global_override` | Enable DLSS overrides globally (applies to all Proton games) |
-| `nvapi` | `proton_enable_nvapi` | Automatically set PROTON_ENABLE_NVAPI=1 for Proton games |
-| `nvapi` | `dxvk_enable_nvapi` | Automatically set DXVK_ENABLE_NVAPI=1 for Vulkan/DX12 games |
-| `nvapi` | `vkd3d_config` | Set to "dxr11" for Vulkan raytracing support |
-
-## 🖥️ Display Server Support
-
-NVIDIA-GUI automatically detects and works on both display servers:
-
-```python
-# Wayland
-if Gdk.Display.get_default().is_wayland():
-    print("Running on Wayland")  # ✅ Works!
-
-# X11
-elif Gdk.Display.get_default().is_x11():
-    print("Running on X11")      # ✅ Works!
-```
-
-**Advantage over Windows NVIDIA App**: The Windows App is X11-only and doesn't work on Wayland (which doesn't exist on Windows anyway). Our Linux version works natively on both.
-
-## 🎨 Visual Design
-
-The UI follows a premium Fintech/Web3 design language:
-
-- **Aurora Glow Effect**: Large blur radiuses with vibrant neon-purple ambient glow
-- **Frozen-Card Glassmorphism**: Semi-transparent backgrounds, backdrop blur, razor-sharp translucent borders
-- **Typography**: Inter or system fonts with high contrast white text on deep charcoal backgrounds
-- **Accents**: Neon purple emissive text shadows for active states
-
-## 📁 Project Structure
-
-```
-nvidia-gui/
-├── src/
-│   ├── main.py              # Full GTK4 UI with dashboard, settings panel
-│   ├── config_manager.py    # Singleton config with XDG paths, TOML/JSON fallback
-│   ├── dlss_manager.py      # DLSS version swapping framework
-│   └── styles.css           # Fintech/Web3 dark-mode theme
-├── install.sh               # XDG-compliant installer
-├── pyproject.toml           # Python package config
-├── README.md                # This file
-├── ARCHITECTURE.md          # Feature comparison vs Windows App
-└── final_summary.md         # Implementation status
-```
-
-## 🚨 Limitations & Workarounds
-
-### NVAPI on Linux (The Big One)
-**Problem**: NVAPI is proprietary Windows DLL, doesn't exist natively on Linux.
-
-**Our Solution**: Environment variable injection + DXVK-NVAPI bridge
 ```bash
-# For Proton/Wine games
-export PROTON_ENABLE_NVAPI=1
-export DXVK_ENABLE_NVAPI=1
-export VKD3D_CONFIG=dxr11  # For Vulkan RT
-```
-**Limitation**: Only works through Proton/Wine, NOT native Linux games.
-
-### DLSS Override Mechanism
-**Windows**: Direct DLL replacement in game directory
-```c++
-Copy("nvngx_dlss.dll.cache/v10.34.1.32/nvngx_dlss.dll", "Steam\game\nvngx_dlss.dll")
+PYTHONPATH=src timeout -k 2 5 python3 src/main.py
 ```
 
-**Linux Reality**: Can't modify game files directly due to Wine/Proton prefixes.
+## Install
 
-**Our Solution**: Environment injection (not yet fully implemented in our version)
-```python
-# Instead of direct copy, we use LD_PRELOAD or environment variables:
-os.environ['LD_PRELOAD'] = '/path/to/nvidia/libs/libnvngx_dlss.so'
-```
-**Status**: Framework ready, needs actual DLL download logic.
-
-### Smooth Motion
-**Windows**: Driver feature, enabled via `PROTON_ENABLE_NVAPI=1` + driver setting
 ```bash
-export NVMEDIA_ENABLE_NVIDIA_SMOOTH_MOTION=1
-```
-**Linux**: Requires NVIDIA driver 590+ and proper Wayland sync support.
-**Status**: Not implemented - would need to modify Proton's Wine DLLs directly.
-
-## 📊 Feature Comparison
-
-| Feature | Windows NVIDIA App | Our Linux Version | Status |
-|---------|-------------------|-------------------|--------|
-| DLSS override (DLL swap) | Native NVAPI DLL injection | Environment variable + Wine prefix modification | ⚠️ Framework ready, implementation needed |
-| Global overrides | Automatic per-game detection | Manual game path scanning | ✅ Global flag exists, manual scanning |
-| Per-game profiles | Full profile system | Basic key-value storage | ❌ Not implemented |
-| Smooth Motion (RTX 40+) | Driver-level feature | N/A (requires driver modification) | ❌ Future feature |
-| NVAPI injection | PROTON_ENABLE_NVAPI=1 via launch options | Environment variable only | ✅ Works for Proton/Wine games |
-| Legacy 3D settings | Anisotropic filtering, FXAA, PhysX | Not applicable (Vulkan/DXVK) | ❌ Linux limitation |
-| Advanced Optimus | App-level dGPU control | System-wide only | ❌ Linux limitation |
-| DLAA/Ultra Performance | Custom rendering resolution | Via environment variables | ⚠️ Partial implementation |
-| **Wayland/X11 auto-detect** | X11-only (Windows) | ✅ Full support for both | ✅ **Advantage over Windows App** |
-| **System tray daemon** | Win32 Taskbar + APIs | libdbus + GTK4 StatusIcon | ✅ Fully functional |
-| **XDG Base Directory compliance** | Hardcoded paths | ✅ Follows XDG spec automatically | ✅ **Advantage over Windows App** |
-
-## 🎨 CSS Styles
-
-The UI uses a premium Fintech/Web3 aesthetic:
-
-```css
-/* Aurora Glow Effect */
-.aurora-glow {
-    background: radial-gradient(ellipse at center, var(--accent-glow) 0%, transparent 70%);
-    filter: blur(40px);
-}
-
-/* Frozen-Card Glassmorphism */
-.glass-card {
-    backdrop-filter: blur(16px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-}
+bash install.sh        # prompts for sudo where it touches system files
 ```
 
-## 🔬 Architecture
+## Status
 
-See `ARCHITECTURE.md` for the complete feature-by-feature comparison and design decisions.
+The architecture, feature detection, DLSS swap, launch injection, effects tier,
+and the full test suite are verified headless and via the smoke launch — **but
+not yet end-to-end against a live game**. The next milestone is to save a preset,
+confirm `localconfig.vdf` carries the managed `source` line, launch via Steam, and
+confirm `NVAPI_DLSS_*` keys took effect and a physical swap landed the DLL plus
+backup.
 
-## 📝 License
+## Project layout
 
-MIT License - See LICENSE file for details.
+```
+src/nvidia_gui/
+  domain/         models + services (pure)
+  application/    ports (ABCs) + use_cases facade
+  adapters/       config, steam, dlss, detection, gpu, ipc, kernel-param, profile
+  assets/         nvidia_features.toml — bundled curated detection DB
+  presentation/   window, views, widgets, theme, icons, download_worker
+tests/            test_services.py + game_corpus/ (six game archetypes)
+```
 
-## 🤝 Contributing
+## License
 
-This is a local-only project that was never pushed to GitHub. If you'd like to contribute or report issues, please create an issue in the project directory.
+MIT — see `LICENSE`.
