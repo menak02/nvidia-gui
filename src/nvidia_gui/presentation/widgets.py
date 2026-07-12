@@ -156,6 +156,70 @@ def pill(text: str, on: bool = True) -> Gtk.Box:
 
 
 # ---------------------------------------------------------------------------
+#  toplevel_of — resolve a clicked widget to its window (for modal parenting)
+# ---------------------------------------------------------------------------
+def toplevel_of(widget: Gtk.Widget) -> Gtk.Window | None:
+    """Resolve a clicked widget to its enclosing ``Gtk.Window``.
+
+    ``Gtk.AlertDialog.choose`` wants a transient parent so the modal stacks over
+    the right window (on a multi-monitor setup an unparented alert may surface
+    on the WM's focused monitor, not the app's own). ``get_root()`` walks up to
+    the containing window. Returns ``None`` on any mismatch rather than raising
+    — :func:`confirm_destructive` tolerates a ``None`` parent (the alert is
+    then unparented but still modal, so the confirm is never blocked by a bad
+    parent lookup).
+    """
+    root = widget.get_root()
+    return root if isinstance(root, Gtk.Window) else None
+
+
+# ---------------------------------------------------------------------------
+#  confirm_destructive — async modal YES/NO for destructive actions (GTK 4.10+)
+# ---------------------------------------------------------------------------
+def confirm_destructive(
+    parent: Gtk.Window | None,
+    message: str,
+    detail: str = "",
+    *,
+    confirm_label: str = "Confirm",
+    on_confirm=None,
+) -> None:
+    """Modal confirm for a destructive action. Async, never blocks.
+
+    ``gtk_dialog_run()`` is gone in GTK4 (re-entrancy), so a confirm is an
+    async ``Gtk.AlertDialog.choose()`` + a ``Gio.AsyncReadyCallback``.
+    ``on_confirm()`` runs ONLY when the user picks the affirmative button
+    (the LAST entry in ``buttons``, matching GTK's convention that the
+    destructive action is right-most); cancel/dismiss/ESC run nothing. The
+    helper never raises -- a finish/dismiss failure just skips the action.
+
+    ``parent`` may be ``None`` (the alert is then unparented; still modal).
+    Verified on GTK 4.22; ``Gtk.AlertDialog`` arrived in 4.10, so this needs
+    GTK >= 4.10 (any 2023+ distro ships that).
+    """
+    dlg = Gtk.AlertDialog()
+    dlg.set_message(message)
+    if detail:
+        dlg.set_detail(detail)
+    buttons = ["Cancel", confirm_label]
+    dlg.set_buttons(buttons)
+
+    def _on_choose(_dialog, res) -> None:
+        try:
+            idx = dlg.choose_finish(res)
+        except Exception:  # noqa: BLE001 -- dismissed/failed -> no action
+            return
+        # right-most button (len-1) == the affirmative/confirm choice
+        if idx == len(buttons) - 1 and on_confirm is not None:
+            try:
+                on_confirm()
+            except Exception as exc:  # noqa: BLE001 -- the caller's action must never crash the idle cb
+                logger.warning("confirm_destructive on_confirm raised: %s", exc)
+
+    dlg.choose(parent, None, _on_choose, None)
+
+
+# ---------------------------------------------------------------------------
 #  Debouncer — coalesce a burst of GTK signals into one trailing write
 # ---------------------------------------------------------------------------
 class Debouncer:
@@ -205,6 +269,81 @@ class Debouncer:
             GLib.source_remove(self._id)
             self._id = 0
         self._pending = None
+
+
+# ---------------------------------------------------------------------------
+#  SaveToast — transient confirmation popup (Gtk.Revealer) at the window bottom
+# ---------------------------------------------------------------------------
+class SaveToast(Gtk.Revealer):
+    """A transient confirmation popup ("Profile saved", "Swap applied") that
+    slides up at the window bottom, holds ~3s, then retracts.
+
+    This mounts the previously-dead ``styles-effects.css`` ``revealer`` styling
+    and replaces the per-view bare inline-label feedback with one canonical
+    surface. Crash-safe per the app contract: the toast is solid CSS fills only
+    (``.nvgui-toast``), and its reveal is a GTK *built-in* transition (not a CSS
+    opacity/blur) — so it never stalls the NVIDIA Wayland compositor.
+
+    Motion-tier aware: the window calls :meth:`set_instant` when the tier
+    changes. In ``instant`` mode (the ``off`` tier) the built-in transition is
+    set to ``NONE`` so the reveal is immediate — the CSS ``revealer`` transition
+    in effects.css only animates the node's own colour shift, which is already
+    gated to nothing by ``nvgui-motion-off *``. In modes (``full``/``minimal``)
+    the slide-up plays.
+
+    Thread-safe enough for the UI path: :meth:`show` may be called from a
+    ``GLib.idle_add`` callback (the only off-main-loop path that feeds it —
+    thematically mirroring :class:`Debouncer` and :class:`TelemetryPoller`).
+    """
+
+    def __init__(self, timeout_ms: int = 2800) -> None:
+        super().__init__()
+        self._timeout = timeout_ms
+        self._hide_id = 0
+        self._instant = False
+        self.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        self.set_reveal_child(False)
+        self.set_halign(Gtk.Align.CENTER)
+        self.set_valign(Gtk.Align.END)
+        self.add_css_class("nvgui-toast")
+        self._label = Gtk.Label(label="", xalign=0.5, wrap=True)
+        self._label.add_css_class("nvgui-toast-label")
+        self.set_child(self._label)
+
+    def set_instant(self, instant: bool) -> None:
+        """Motion-tier switch: instant (the ``off`` tier) skips the slide."""
+        self._instant = bool(instant)
+        self.set_transition_type(
+            Gtk.RevealerTransitionType.NONE if self._instant
+            else Gtk.RevealerTransitionType.SLIDE_UP
+        )
+
+    def show(self, message: str, timeout_ms: int | None = None) -> None:
+        """Reveal *message*, then retract after the timeout. A second show()
+        cancels any pending retract and restarts the timer (most-recent wins).
+        Empty/falsy message is a no-op — never surface a blank toast."""
+        if not message:
+            return
+        self._cancel_hide()
+        self._label.set_text(message)
+        self.set_reveal_child(True)
+        ms = self._timeout if timeout_ms is None else int(timeout_ms)
+        self._hide_id = GLib.timeout_add(ms, self._hide)
+
+    def dismiss(self) -> None:
+        """Retract immediately and drop the pending timer."""
+        self._cancel_hide()
+        self.set_reveal_child(False)
+
+    def _hide(self) -> bool:
+        self._hide_id = 0
+        self.set_reveal_child(False)
+        return False  # one-shot
+
+    def _cancel_hide(self) -> None:
+        if self._hide_id:
+            GLib.source_remove(self._hide_id)
+            self._hide_id = 0
 
 
 # ---------------------------------------------------------------------------

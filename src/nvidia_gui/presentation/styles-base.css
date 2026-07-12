@@ -324,3 +324,28 @@ button:active:focus-visible,
 .nvgui-toggle-unsupported switch slider {
     background: #4a4a4a;
 }
+
+/* =========================================================== Save toast
+ * The transient confirmation popup mounted at the window bottom (see
+ * widgets.SaveToast). The reveal itself is a GTK built-in transition, NOT a
+ * CSS opacity/blur — so this node is solid fills only, per the crash-safe
+ * contract (no compositor stall on Wayland). The effects file styles the
+ * revealer node's own colour-shift timing per motion tier; this block is the
+ * visible popup: a green-tinted dark plate with a hairline border, the accent
+ * label, and 2px angular radii. A negative bottom margin tucks the toast
+ * into the window's lower edge so the slide-up reads as rising from the
+ * status strip.
+ */
+.nvgui-toast {
+    background: #162012;
+    border: 1px solid #2c3a12;
+    border-radius: 2px;
+    padding: 10px 18px;
+    margin: 6px;
+    min-width: 200px;
+}
+
+.nvgui-toast-label {
+    color: #bdf33b;
+    font-weight: 700;
+}

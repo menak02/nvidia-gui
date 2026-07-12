@@ -1318,6 +1318,59 @@ def test_acf_parser_breadth_multi_library_and_broken_manifest() -> None:
     assert raised, "the broken acf must raise VdfError -- scan() relies on the catch"
 
 
+def test_version_never_lies_dev_fallback_when_uninstalled() -> None:
+    """uc.version() honors the confidence-tiered fallback: installed metadata is
+    authoritative; the SettingsPort ``app.version`` is the secondary; a totally
+    bare checkout returns the literal ``"dev"`` rather than a fabricated number.
+
+    Never-lie provenance mirrors the feature detector: an unset surface degrades
+    honestly instead of presenting a stale hard-coded value.
+    """
+    from nvidia_gui.application.use_cases import UseCases
+    import importlib.metadata as md
+
+    def _bare_uc(settings=None):
+        return UseCases(
+            gpu=None, driver=None, display=None, games=None, profiles=None,
+            launch=None, dlss_cache=None, dlss_swap=None, kernel=None,
+            diagnostics=None, detection=None, settings=settings,
+        )
+
+    # 1) metadata raises PackageNotFoundError -> "dev" (bare checkout, no
+    #    settings port). ``mock.patch`` resets cleanly so the test is
+    #    independent of whether this checkout happens to be pip-installed.
+    with mock.patch.object(
+        md, "version", side_effect=md.PackageNotFoundError("nvidia-gui")
+    ):
+        assert _bare_uc().version() == "dev", "uninstalled -> 'dev'"
+
+    # 2) metadata still raises, but a SettingsPort carries app.version -> that
+    #    configured value surfaces (the secondary tier).
+    class _SettingsDict:
+        def __init__(self, d):
+            self._d = d
+        def get(self, dotted, default=None):
+            return self._d.get(dotted, default)
+        def set(self, dotted, value):
+            self._d[dotted] = value
+    sd = _SettingsDict({"app.version": "9.9.9-test"})
+    with mock.patch.object(
+        md, "version", side_effect=md.PackageNotFoundError("nvidia-gui")
+    ):
+        assert _bare_uc(sd).version() == "9.9.9-test", "configured app.version falls back"
+
+    # 3) installed metadata resolves -> that is authoritative (the primary
+    #    tier), regardless of what app.version preferences says.
+    with mock.patch.object(md, "version", return_value="2.3.4"):
+        assert _bare_uc(sd).version() == "2.3.4", "installed metadata wins"
+
+    # 4) a metadata read that throws something OTHER than PackageNotFoundError
+    #    (corrupted dist metadata) is swallowed -> falls to the next tier, never
+    #    propagates into the UI.
+    with mock.patch.object(md, "version", side_effect=RuntimeError("boom")):
+        assert _bare_uc(sd).version() == "9.9.9-test", "non-PackageNotFound swallowed"
+
+
 # ---------------------------------------------------------------------------
 #  Plain-python runner (used when pytest isn't installed; pytest also works)
 # ---------------------------------------------------------------------------

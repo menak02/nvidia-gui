@@ -289,6 +289,34 @@ class UseCases:
         quick action, not block on it."""
         return self.kernel.set_persistence(enabled)
 
+    # ---- version (single source of truth = pyproject.toml, surfaced as
+    # installed-distribution metadata) -------------------------------------
+    def version(self) -> str:
+        """The app version, never silently lied about.
+
+        Resolution order: (1) installed-distribution metadata
+        (``importlib.metadata.version("nvidia-gui")`` — written from
+        ``pyproject.toml`` at install/develop-build time, the single source of
+        truth for a released artifact). (2) the ``app.version`` preference held
+        by :class:`SettingsPort` (the bundled ``config_toml`` default ships the
+        same value). (3) the literal ``"dev"`` when neither is available (an
+        uninstalled source checkout) -- honest, never a fabricated stale number.
+
+        This is an *application*-layer read: ``importlib.metadata`` is stdlib
+        (not an adapter), and the settings fallback goes through the port
+        interface, so the presentation layer can call ``uc.version()`` without
+        ever importing an adapter.
+        """
+        import importlib.metadata as _md
+        try:
+            return _md.version("nvidia-gui")
+        except _md.PackageNotFoundError:
+            pass
+        except Exception:  # noqa: BLE001 -- metadata read must never crash the UI
+            pass
+        v = self.setting("app.version", None)
+        return v if v else "dev"
+
     # ---- app prefs (presentation-facing persisted settings) --------------
     def setting(self, dotted: str, default=None):
         """Read an app preference (window/pane geometry, ...). Returns *default*

@@ -26,7 +26,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
 
-from .widgets import ToggleRow, pill  # noqa: E402  sibling presentation module
+from .widgets import ToggleRow, pill, toplevel_of  # noqa: E402  sibling presentation module
 
 if TYPE_CHECKING:
     from ..application.use_cases import UseCases
@@ -82,6 +82,53 @@ def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
     box.append(child)
     sw.set_child(box)
     return sw
+
+
+# The repo's stable home -- the single place the GitHub URL is authored. A
+# module constant (not re-fetched from ``git remote``, which would run a
+# subprocess from the presentation layer and breach the hexagonal seam) keeps
+# the About box's website/credits honest across releases.
+_REPO_URL = "https://github.com/menak02/nvidia-gui"
+_AUTHORS = ["mena"]
+# Trademark-safe, nominative-use comments: what the project IS, not what it
+# claims to be affiliated with.
+_COMMENTS = (
+    "A community Linux GPU control center: live telemetry, driver and "
+    "kernel-module controls, DLSS overrides, and per-game launch injection."
+)
+_DISCLAIMER = (
+    "Unaffiliated with NVIDIA Corporation. NVIDIA, GeForce, RTX, and DLSS "
+    "are trademarks of NVIDIA Corp."
+)
+
+
+def _open_about_dialog(parent: Gtk.Window | None, version: str) -> None:
+    """Show the GTK ``AboutDialog``. Modal + transient to *parent* so it stacks
+    over the app's own window on a multi-monitor setup (an unparented dialog
+    would float on the WM's focused monitor). Async via ``::response`` →
+    ``destroy()`` (``gtk_dialog_run`` is gone in GTK4); closing/ESC fires a
+    ``DELETE_EVENT``/``CLOSE`` response and the same ``destroy`` runs, so the
+    dialog is never leaked. Never raises -- a build/present fault is logged and
+    swallowed (a fault in an About box must never crash the settings page)."""
+    try:
+        dlg = Gtk.AboutDialog.new()
+        dlg.set_program_name("NVIDIA-GUI")
+        dlg.set_version(version)
+        dlg.set_comments(_COMMENTS)
+        dlg.set_license_type(Gtk.License.MIT_X11)
+        dlg.set_website(_REPO_URL)
+        dlg.set_website_label("Source on GitHub")
+        dlg.set_authors(_AUTHORS)
+        dlg.set_copyright(f"© mena — {_DISCLAIMER}")
+        dlg.set_logo_icon_name("org.mena.nvidia-gui")
+        if parent is not None:
+            dlg.set_transient_for(parent)
+        dlg.set_modal(True)
+        dlg.connect("response", lambda d, _id: d.destroy())
+        dlg.present()
+    except Exception as exc:  # noqa: BLE001 -- About box must never crash settings
+        import logging
+        logging.getLogger(__name__).warning("AboutDialog failed: %s", exc)
 
 
 def build_settings_view(uc: "UseCases",
@@ -183,10 +230,26 @@ def build_settings_view(uc: "UseCases",
     desc.add_css_class("nvgui-row-value")
     about_body.append(desc)
 
-    version = Gtk.Label(label="Version 1.0.0", xalign=0)  # placeholder
+    # Real version, never fabricated: resolved via uc.version() (installed
+    # distribution metadata → configured app.version → "dev"). Shown as a
+    # key:value TextRow-style pairing so it reads as a fact, not a banner.
+    vstr = uc.version()
+    version = Gtk.Label(label=f"Version {vstr}", xalign=0)
     version.add_css_class("nvgui-muted")
     version.set_margin_top(6)
     about_body.append(version)
+
+    # The full GTK AboutDialog: program name, MIT license, repo URL, credits,
+    # icon. Resolved parent at click-time via toplevel_of so the modal stacks
+    # over this app window on multi-monitor Hyprland.
+    about_btn = Gtk.Button(label="About NVIDIA-GUI…")
+    about_btn.add_css_class("nvgui-btn-ghost")
+    about_btn.set_tooltip_text("Open the about dialog (program, version, license, credits)")
+    about_btn.set_margin_top(6)
+    about_btn.set_halign(Gtk.Align.START)
+    about_btn.connect("clicked",
+                      lambda b: _open_about_dialog(toplevel_of(b), vstr))
+    about_body.append(about_btn)
 
     # license line uses widgets.pill (the nvgui-pill badge class)
     license_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)

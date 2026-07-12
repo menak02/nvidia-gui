@@ -27,7 +27,15 @@ from ..domain.models import (
     GameCapability,
 )
 from .download_worker import StreamlineDownloader
-from .widgets import Debouncer, StatGraph, TextRow, ToggleRow, pill
+from .widgets import (
+    Debouncer,
+    StatGraph,
+    TextRow,
+    ToggleRow,
+    confirm_destructive,
+    pill,
+    toplevel_of,
+)
 
 if TYPE_CHECKING:
     from ..application.use_cases import UseCases
@@ -218,6 +226,11 @@ class GamesView:
         self._root = Gtk.Box()
         self._games: list[Game] = []
         self._sel: Game | None = None
+        # scan-button ref + in-flight flag so an already-running scan can't be
+        # re-triggered (the worker thread + GLib.idle_add hop is async). The
+        # button is created in _build; None until then guards early refresh().
+        self._scan_btn: Gtk.Button | None = None
+        self._scanning = False
         # Detected per-game capability, cached once per selected game and reused
         # across rebuilds (override flip / save / optimize / revert). Re-detected
         # only when the user switches games or hits the "Detect features" button.
@@ -243,7 +256,9 @@ class GamesView:
         t.set_hexpand(True)
         scan = Gtk.Button(label="Scan")
         scan.add_css_class("nvgui-btn-primary")
+        scan.set_tooltip_text("Re-scan the Steam library for installed games")
         scan.connect("clicked", lambda _b: self.refresh())
+        self._scan_btn = scan
         hdr.append(t); hdr.append(scan)
         left.append(hdr)
         sw = Gtk.ScrolledWindow(); sw.set_vexpand(True); sw.set_child(self._listbox)
@@ -441,8 +456,58 @@ class GamesView:
         return self._root
 
     def refresh(self) -> None:
-        self._games = self.uc.scan_games()
+        """Re-scan the Steam library ASYNC (no main-thread freeze).
+
+        ``uc.scan_games()`` walks every Steam library + ACF manifest, which on a
+        big library is a few hundred ms of stat/parse -- freezing the UI frame
+        on the timeout-killed main loop looked like a hang (the user's #2
+        "something's off"). Offload to a worker thread + ``GLib.idle_add`` the
+        list populate (mirrors the detect/optimise/diagnose off- thread pattern
+        already in this view). A "Scanning..." placeholder row shows state, and
+        the Scan button is disabled while a scan is in-flight so it can't be
+        re-triggered into a thread pile-up. Never raises: a scan failure
+        surfaces in the placeholder + restores the button.
+        """
+        if self._scanning:
+            return
+        self._scanning = True
+        if self._scan_btn is not None:
+            self._scan_btn.set_sensitive(False)
+            self._scan_btn.set_label("Scanning…")
         self._listbox.remove_all()
+        placeholder = Gtk.Label(label="Scanning…")
+        placeholder.add_css_class("nvgui-muted")
+        placeholder.set_margin_top(16)
+        self._listbox.append(placeholder)
+        self._show_empty_state()
+
+        def work() -> None:
+            try:
+                games = self.uc.scan_games()
+            except Exception as exc:  # noqa: BLE001 -- never crash the worker
+                logger.warning("scan_games failed: %s", exc)
+                GLib.idle_add(lambda e=exc: self._after_scan(None, str(e)))
+            else:
+                GLib.idle_add(lambda g=games: self._after_scan(g, None))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _after_scan(self, games, err) -> bool:
+        """idle_add hop back to the main thread: populate the list (or surface
+        the scan error). One-shot (returns False)."""
+        self._scanning = False
+        if self._scan_btn is not None:
+            self._scan_btn.set_sensitive(True)
+            self._scan_btn.set_label("Scan")
+        self._listbox.remove_all()
+        if err is not None:
+            hint = Gtk.Label(label=f"Scan failed: {err}")
+            hint.add_css_class("nvgui-muted")
+            hint.set_margin_top(16)
+            self._listbox.append(hint)
+            self._show_empty_state()
+            return False
+        self._games = games or []
         # Stash each row's index on its child box: GTK4 dropped the
         # `Gtk.ListBoxRow.get_index()` API that GTK3 had, so recovering the
         # index from a selected row needs us to carry it ourselves.
@@ -462,6 +527,7 @@ class GamesView:
             self._listbox.select_row(self._listbox.get_row_at_index(0))
         else:
             self._show_empty_state()
+        return False
 
     def _on_select(self, _lb, row) -> None:
         # row is the ListBoxRow the listbox wraps around our child box; the
@@ -642,7 +708,30 @@ class GamesView:
             "toggles for this game (preserves DLL swap + custom env).")
         opt.connect("clicked", self._on_optimize)
         reset = Gtk.Button(label="Revert to saved"); reset.add_css_class("nvgui-btn-ghost")
-        reset.connect("clicked", lambda _b: self._build_editor(self._sel))
+        reset.set_tooltip_text("Discard unsaved edits and reload this game's saved profile")
+
+        def _on_reset(btn) -> None:
+            # snapshot the game at click-time: an async confirm means the user
+            # could switch rows between clicking Revert and clicking Discard.
+            # Binding `game` here pins which profile we revert, so the modal
+            # confirm never applies to a selection the user has since moved off.
+            game = self._sel
+            if game is None:
+                return
+
+            def _do_revert() -> None:
+                if game is not None:
+                    self._build_editor(game)
+
+            confirm_destructive(
+                toplevel_of(btn),
+                "Discard unsaved changes?",
+                detail="Revert this game's profile to the last saved version.",
+                confirm_label="Discard",
+                on_confirm=_do_revert,
+            )
+
+        reset.connect("clicked", _on_reset)
         bar.append(save); bar.append(opt); bar.append(reset)
         self._status_label = Gtk.Label(label=""); self._status_label.add_css_class("nvgui-muted")
         self._status_label.set_hexpand(True)
@@ -796,19 +885,33 @@ class GamesView:
             res.message if res.ok else f"swap: {res.message}")
         self._refresh_swap_versions()
 
-    def _on_revert_swap(self, _b) -> None:
-        if self._sel is None:
+    def _on_revert_swap(self, btn) -> None:
+        # snapshot at click-time: the async confirm means self._sel could move
+        # to a different game before the user confirms. Binding `game` here
+        # pins which game's swapped DLL we restore (.nvagogui.orig backup).
+        game = self._sel
+        if game is None:
             return
-        try:
-            res = self.uc.revert_dlss_swap(self._sel, None)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("revert_dlss_swap raised: %s", exc)
-            self._status_label.set_text(f"revert failed - {exc}")
+
+        def _do_revert() -> None:
+            try:
+                res = self.uc.revert_dlss_swap(game, None)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("revert_dlss_swap raised: %s", exc)
+                self._status_label.set_text(f"revert failed - {exc}")
+                self._refresh_swap_versions()
+                return
+            self._status_label.set_text(
+                res.message if res.ok else f"revert: {res.message}")
             self._refresh_swap_versions()
-            return
-        self._status_label.set_text(
-            res.message if res.ok else f"revert: {res.message}")
-        self._refresh_swap_versions()
+
+        confirm_destructive(
+            toplevel_of(btn),
+            "Revert the DLL swap?",
+            detail="Restore the backed-up original NVNGX_DLSS.dll for this game.",
+            confirm_label="Revert",
+            on_confirm=_do_revert,
+        )
 
     def _on_save(self, _b) -> None:
         if self._sel is None:

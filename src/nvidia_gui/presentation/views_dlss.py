@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 import gi
 
@@ -29,7 +29,7 @@ from gi.repository import GLib, Gtk, Pango  # noqa: E402
 
 from ..domain.models import DlssVersion, Game  # noqa: E402  (type helpers)
 from .download_worker import StreamlineDownloader
-from .widgets import TextRow, pill
+from .widgets import TextRow, confirm_destructive, pill, toplevel_of
 
 if TYPE_CHECKING:
     from ..application.use_cases import UseCases
@@ -95,12 +95,17 @@ def _fill_dropdown(dd: Gtk.DropDown, labels: list[str], fallback: str) -> None:
     dd.set_selected(0)
 
 
-def build_dlss_view(uc: "UseCases") -> Gtk.Widget:
+def build_dlss_view(uc: "UseCases",
+                    on_status: "Callable[[str], None] | None" = None,
+                    ) -> Gtk.Widget:
     """Build the DLSS page: cached-version list, the single Streamline
     download, per-game swap/revert, and seed-from-folder.
 
-    Signature is fixed (``build_dlss_view(uc) -> Gtk.Widget``); ``window.py``
-    registers the returned widget directly in the nav stack.
+    ``on_status`` (optional) is the canonical confirmation surface — the
+    window's save toast. Swap apply/revert push their result message through it
+    for transient feedback, in addition to the persistent inline status label.
+    Backward-compatible: callers that pass only ``uc`` (tests, older call sites)
+    get the inline-label-only behavior (on_status None → skipped).
     """
     column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
 
@@ -176,8 +181,10 @@ def build_dlss_view(uc: "UseCases") -> Gtk.Widget:
     btnrow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     applyb = Gtk.Button(label="Apply swap")
     applyb.add_css_class("nvgui-btn-primary")
+    applyb.set_tooltip_text("Swap this game's NVNGX_DLSS.dll with the selected cached version (backs up the original)")
     revertb = Gtk.Button(label="Revert swap")
     revertb.add_css_class("nvgui-btn-danger")
+    revertb.set_tooltip_text("Restore the backed-up original NVNGX_DLSS.dll for the selected game")
     btnrow.append(applyb)
     btnrow.append(revertb)
     swap_body.append(btnrow)
@@ -337,6 +344,10 @@ def build_dlss_view(uc: "UseCases") -> Gtk.Widget:
             swap_label.set_text(f"swap failed: {exc}")
             return
         swap_label.set_text(res.message if res.ok else f"swap: {res.message}")
+        # Transient confirmation on success; failures stay on the persistent
+        # inline label (a toast would flash + hide the error before it's read).
+        if res.ok and on_status is not None:
+            on_status(res.message)
         refresh_swap_status()
 
     def _on_revert(_b) -> None:
@@ -344,14 +355,29 @@ def build_dlss_view(uc: "UseCases") -> Gtk.Widget:
         if game is None:
             swap_label.set_text("Select a game first.")
             return
-        try:
-            res = uc.revert_dlss_swap(game, None)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("dlss revert swap failed: %s", exc)
-            swap_label.set_text(f"revert failed: {exc}")
-            return
-        swap_label.set_text(res.message if res.ok else f"revert: {res.message}")
-        refresh_swap_status()
+        # Snapshot the game into the closure: between this ``clicked`` firing and
+        # the user picking "Revert" in the async AlertDialog, the DropDown's
+        # selected game can change. Pin the click-time game + the clicked button
+        # (for modal parenting) so the confirm acts on exactly what was shown.
+        def _do_revert(pinned: "Game", btn: Gtk.Button) -> None:
+            try:
+                res = uc.revert_dlss_swap(pinned, None)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("dlss revert swap failed: %s", exc)
+                swap_label.set_text(f"revert failed: {exc}")
+                return
+            swap_label.set_text(res.message if res.ok else f"revert: {res.message}")
+            if res.ok and on_status is not None:
+                on_status(res.message)
+            refresh_swap_status()
+
+        confirm_destructive(
+            toplevel_of(_b),
+            "Revert the DLL swap?",
+            detail="Restore the backed-up original NVNGX_DLSS.dll for this game.",
+            confirm_label="Revert",
+            on_confirm=lambda pinned=game, btn=_b: _do_revert(pinned, btn),
+        )
 
     def _on_seed(_b) -> None:
         src = seed_dir.get_text().strip()

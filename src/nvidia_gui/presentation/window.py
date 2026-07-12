@@ -23,7 +23,7 @@ from .views import (  # noqa: E402
 )
 from .views_dlss import build_dlss_view  # noqa: E402
 from .views_settings import build_settings_view  # noqa: E402
-from .widgets import Debouncer, NavSidebar  # noqa: E402
+from .widgets import Debouncer, NavSidebar, SaveToast  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -182,16 +182,27 @@ class MainWindow(Gtk.ApplicationWindow):
                 view = getattr(self, self._class_pages[name])
                 self.stack.add_named(view.root(), name)
             elif name == "dlss":
-                self.stack.add_named(build_dlss_view(uc), name)
+                self.stack.add_named(
+                    build_dlss_view(uc, on_status=self._push_status), name
+                )
             elif name == "settings":
                 self.stack.add_named(
                     build_settings_view(uc, on_anim_changed=self._on_anim_changed),
                     name,
                 )
-        self.stack.set_visible_child_name("dashboard")
+        # Restore the last-viewed page (persisted "presentation.active_page").
+        # Validated against _PAGES so a name removed in a later release can't
+        # leave the sidebar and stack out of sync — falls back to dashboard.
+        saved = uc.setting("presentation.active_page", "dashboard")
+        active = saved if saved in {n for n, _l, _i in _PAGES} else "dashboard"
+        self.stack.set_visible_child_name(active)
         self.sidebar.bind_stack(self.stack)
         for name, label, icon_name in _PAGES:
             self.sidebar.add_item(name, label, icon_name)
+        # Persist every page switch — the Stack's visible-child is the single
+        # source of truth, so this catches sidebar buttons, the overlay
+        # hamburger's switch_to, and future keyboard accelerators alike.
+        self.stack.connect("notify::visible-child", self._on_page_changed)
 
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         # shrink=False: respect each child's modest floor instead of letting the
@@ -211,6 +222,14 @@ class MainWindow(Gtk.ApplicationWindow):
         sep = Gtk.Separator()
         main.append(sep)
         main.append(self._paned)
+        # Save toast: the canonical transient-confirmation surface, mounted LAST
+        # so it sits at the window bottom. A Gtk.Revealer collapses to zero
+        # height when hidden, so it reserves no space until a save/swap fires.
+        self.toast = SaveToast()
+        # Scope the toast's slide to the boot-time motion tier (the anim handler
+        # guards with getattr so its boot call before this line is safe).
+        self.toast.set_instant(self._motion_off())
+        main.append(self.toast)
         self.set_child(main)
 
         # ---- telemetry -----------------------------------------------
@@ -241,6 +260,34 @@ class MainWindow(Gtk.ApplicationWindow):
                 self.remove_css_class(cls)
         self.add_css_class(f"nvgui-motion-{tier}")
         self.uc.set_setting("presentation.animations", tier)
+        # Re-scope the save toast to the new tier (guarded: the boot call at
+        # __init__ runs before self.toast is constructed).
+        toast = getattr(self, "toast", None)
+        if toast is not None:
+            toast.set_instant(tier == "off")
+
+    def _motion_off(self) -> bool:
+        """True iff the root is currently on the ``off`` motion tier. The toast
+        reads this once at mount (the anim handler keeps it in sync after)."""
+        return "nvgui-motion-off" in (self.get_css_classes() or [])
+
+    def _push_status(self, message: str) -> None:
+        """The surface views reach to show a transient confirmation (the toast).
+        Views get a bound callback, never the toast object — so a view can't
+        assume anything about the widget that happens to mount the message."""
+        self.toast.show(message)
+
+    def _on_page_changed(self, stack, _pspec) -> None:
+        """Persist ``presentation.active_page`` on every page switch.
+
+        Fires for sidebar clicks, the overlay hamburger's ``switch_to``, and
+        any future keyboard accel that flips the Stack — one seam, all drivers.
+        Guarded: a None child (shouldn't happen, but the Stack yields None if no
+        child set) just no-ops rather than persisting an empty name.
+        """
+        name = stack.get_visible_child_name()
+        if name:
+            self.uc.set_setting("presentation.active_page", name)
 
     # ---- overlay nav menu ----------------------------------------------
     def _populate_overlay_menu(self) -> None:
