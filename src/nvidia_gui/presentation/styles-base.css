@@ -36,7 +36,7 @@ window {
 }
 
 .nvgui-nav-subtitle {
-    color: #6a6a6a;
+    color: #8a8a8a;
     font-size: 0.82rem;
     padding: 0 10px 16px 10px;
 }
@@ -81,7 +81,7 @@ window {
 }
 
 .nvgui-card-subtle {
-    color: #7a7a7a;
+    color: #9a9a9a;
     font-size: 0.84rem;
     margin-bottom: 10px;
 }
@@ -143,7 +143,7 @@ button:active {
 
 button:disabled {
     background: #121212;
-    color: #5a5a5a;
+    color: #7a7a7a;
     border-color: #1e1e1e;
 }
 
@@ -216,7 +216,7 @@ entry:focus {
 }
 
 entry:disabled {
-    color: #5a5a5a;
+    color: #7a7a7a;
     background: #121212;
 }
 
@@ -260,12 +260,12 @@ scrollbar slider:hover {
 
 .nvgui-pill.off {
     background: #1a1a1a;
-    color: #7a7a7a;
+    color: #8a8a8a;
     border-color: #2e2e2e;
 }
 
 .nvgui-muted {
-    color: #6a6a6a;
+    color: #9a9a9a;
 }
 
 .nvgui-status-dot {
@@ -280,5 +280,47 @@ scrollbar slider:hover {
 }
 
 .nvgui-status-dot.off {
+    background: #4a4a4a;
+}
+
+/* =========================================================== Focus + a11y
+ * Keyboard focus ring: 2px #76b900 outline, 1px offset, only on
+ * :focus-visible (keyboard/Tab nav) so mouse users never see a ring. A solid
+ * outline -- NOT box-shadow/filter/blur -- so it stays Wayland-compositor-safe
+ * under the no-translucent-overlay contract. The hover/active :focus-visible
+ * override drops the ring for mouse users who click a focused control. */
+button:focus-visible,
+switch:focus-visible,
+.nvgui-nav-btn:focus-visible,
+combobox:focus-visible,
+entry:focus-visible,
+.nvgui-pill:focus-visible {
+    outline: 2px solid #76b900;
+    outline-offset: 1px;
+}
+
+button:hover:focus-visible,
+button:active:focus-visible,
+.nvgui-nav-btn:hover:focus-visible {
+    outline: none;
+}
+
+/* Capability-gated "unsupported" toggle (views.py _gate): the ToggleRow box
+ * wrapping a switch the game's detected capability marks unsupported.
+ * set_sensitive(False) already disables interaction + GTK dims the switch;
+ * this class is the SECONDARY signal that distinguishes "unsupported by this
+ * game/hardware" from "off by choice" -- a hairline left bar in muted grey +
+ * a desaturated label + a flat (non-green) slider. Solid fills only, no
+ * opacity overlays. */
+.nvgui-toggle-unsupported {
+    border-left: 2px solid #3a3a3a;
+    padding-left: 8px;
+}
+
+.nvgui-toggle-unsupported .nvgui-row-label {
+    color: #8a8a8a;
+}
+
+.nvgui-toggle-unsupported switch slider {
     background: #4a4a4a;
 }
