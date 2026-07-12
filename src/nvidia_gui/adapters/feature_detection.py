@@ -408,26 +408,94 @@ class SteamFeatureDetector(FeatureDetectionPort):
             return False, False
         return self._probe_dll_tree(root)
 
-    def _probe_dll_tree(self, root: pathlib.Path) -> tuple[bool, bool]:
-        """Walk a dir tree for nvngx_dlss.dll / nvngx_dlssg.dll.
+    # Well-known subdirs where NVIDIA DLSS DLLs nominally live. The eager pass
+    # checks these first -- it resolves the common layouts (flat root, bin/,
+    # the Unreal ``Binaries/Win64`` family, the NVIDIA third-party plugin dir)
+    # without a full tree walk. NOTE: this must stay aligned with the candidate
+    # set used by ``services.dlss_target_paths()`` for the DLSS-swap flow, or
+    # the swap UI can target a DLL the capability chip still reports UNKNOWN --
+    # the integrated-but-disjoint bug this tuple widening closes.
+    _DLL_SUBDIRS: tuple[str, ...] = (
+        "bin", "Binaries",
+        "bin/x64", "win64",
+        "Binaries/Win64", "Binaries/Win64Shipping",
+        "Engine/Binaries/ThirdParty/NVIDIA",
+    )
 
-        Bounded: we eagerly look a couple of common subdirs (the game root and
-        a bin/ subdir) rather than a full recursive walk -- a full os.walk on a
-        large game tree is slow and most DLSS DLLs live at root or bin.
+    def _probe_dll_tree(self, root: pathlib.Path) -> tuple[bool, bool]:
+        """Walk a game's install tree for nvngx_dlss.dll / nvngx_dlssg.dll.
+
+        Two passes: an eager pass over the well-known subdirs (where DLSS DLLs
+        nominally live), then a bounded ``os.walk`` fallback so an UNLISTED game
+        shipping its DLL at an exotic path still self-detects -- the whole point
+        of the install-dir tier is that curation can't cover every shipping
+        layout (e.g. a UE5 game with its own plugin vendoring nvngx_dlss.dll).
+        Bounded: max depth 5, bulky media/archive subtrees pruned, fan-out cap,
+        early-out the moment both DLL kinds are confirmed. Never raises.
         """
         sr = dlssg = False
+
+        # ---- pass 1: well-known roots (the common layouts resolve here) ----
         cands = [root]
-        for sub in ("bin", "Binaries", "bin/x64", "win64"):
+        for sub in self._DLL_SUBDIRS:
             cands.append(root / sub)
         for d in cands:
             if not d.is_dir():
                 continue
-            for name in ("nvngx_dlss.dll",):
-                if not sr and (d / name).is_file():
-                    sr = True
-            for name in ("nvngx_dlssg.dll",):
-                if not dlssg and (d / name).is_file():
-                    dlssg = True
+            if not sr and (d / "nvngx_dlss.dll").is_file():
+                sr = True
+            if not dlssg and (d / "nvngx_dlssg.dll").is_file():
+                dlssg = True
+            if sr and dlssg:
+                return sr, dlssg
+
+        # ---- pass 2: bounded fallback walk (unlisted exotic layouts) ----
+        try:
+            sr, dlssg = self._bounded_dll_walk(root, sr, dlssg)
+        except Exception:  # noqa: BLE001 -- the never-raise contract
+            logger.debug("bounded dll-tree walk failed (ignored)", exc_info=True)
+        return sr, dlssg
+
+    def _bounded_dll_walk(
+        self, root: pathlib.Path, sr: bool, dlssg: bool
+    ) -> tuple[bool, bool]:
+        """Bounded recursive search for DLSS DLLs, honoring never-raise.
+
+        Caps runtime on big game trees (some installs exceed 50 GB with packed
+        media archives): max depth 5, prune the bulky subtrees that only hold
+        media/archive content (never code DLLs), cap per-dir fan-out, and
+        early-out the instant both DLL kinds are confirmed.
+        """
+        max_depth = 5
+        # Subtrees that only hold media/archive content -- searching them burns
+        # I/O and never finds nvngx_dlss.dll, so prune up front.
+        prune = {
+            "content", "cinematics", "_commonredist", "redist",
+            "data", "paks", "movies", "video", "videos", "audio",
+            "precache", "shadercache", "logs", "screenshots",
+        }
+        # A single dir with >this many entries is almost certainly a packed
+        # archive expansion or an asset dump; skip rather than fan out.
+        max_entries = 4000
+
+        for dirpath, dirnames, filenames in os.walk(root):
+            rel = os.path.relpath(dirpath, root)
+            depth = 0 if rel == "." else rel.count(os.sep) + 1
+            if depth > max_depth:
+                del dirnames[:]   # don't descend past the cap
+                continue
+            # prune media/archive subtrees in place (mutate dirnames so os.walk
+            # skips them) and drop .pak/.pak.<n> archive files' parent dirs.
+            dirnames[:] = [
+                d for d in dirnames
+                if d.lower() not in prune and not d.lower().endswith(".pak")
+            ]
+            if len(dirnames) > max_entries:
+                del dirnames[:]
+            if "nvngx_dlss.dll" in filenames and not sr:
+                sr = True
+            if "nvngx_dlssg.dll" in filenames and not dlssg:
+                dlssg = True
             if sr and dlssg:
                 break
         return sr, dlssg

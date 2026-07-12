@@ -1145,6 +1145,105 @@ def test_cyberpunk_1091500_regression_via_real_bundled_db() -> None:
     assert cap.notes   # no crash; the offline floor (bundled) decided
 
 
+# ---- umbrella 4b: BORDERLANDS 4 (1285190) curated regression ---------------
+# The named user-reported miss: BL4 was UNKNOWN after Detect because it was
+# absent from the curated DB. Pins the bund-led row so it can't revert.
+def test_borderlands4_1285190_curated_regression_via_real_bundled_db() -> None:
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    real_db = (Path(__file__).resolve().parent.parent / "src" / "nvidia_gui"
+               / "assets" / "nvidia_features.toml")
+    assert real_db.is_file(), f"bundled feature DB missing: {real_db}"
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda _g: None,
+            steam_root=str(Path(tempfile.mkdtemp())),
+            settings=None,
+            bundled_db=real_db,
+        )
+        bl4 = Game(appid="1285190", name="Borderlands 4",
+                   installdir="Borderlands 4")
+        cap = det.probe(bl4)
+    # Borderlands 4: DLSS 4 SR + FG + MFG + RT, Reflex 2 inferred from MFG.
+    assert cap.dlss_sr.supported is True
+    assert cap.dlss_sr.source in (FeatureSource.BUNDLED, FeatureSource.INSTALLDIR,
+                                  FeatureSource.PREFIX)
+    assert cap.dlss_fg.supported is True
+    assert cap.reflex.supported is True
+    assert cap.rt.supported is True
+    assert cap.is_known() is True
+    assert cap.notes
+
+
+# ---- umbrella 4c: install-dir probe covers Binaries/Win64 (general fix) ---
+# The GENERAL robustness fix, not just the curated row: an UNLISTED game (a
+# fictional appid with NO curated row) whose nvngx_dlss.dll ships in the UE-style
+# ``Binaries/Win64`` must self-detect via the install-dir DLL probe -- before
+# this batch _probe_dll_tree never looked there, so any UE4/UE5 DLSS game the
+# curated DB hadn't vetted fell to UNKNOWN even with the DLL present on disk.
+def test_install_dir_probe_finds_dlss_in_binaries_win64_unlisted() -> None:
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    tmp = Path(tempfile.mkdtemp())
+    install = tmp / "common" / "FictionalUE5Game"
+    win64 = install / "Binaries" / "Win64"
+    win64.mkdir(parents=True)
+    (win64 / "nvngx_dlss.dll").write_bytes(b"PE\x00\x00")  # present on disk
+    real_db = (Path(__file__).resolve().parent.parent / "src" / "nvidia_gui"
+               / "assets" / "nvidia_features.toml")
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda g: str(install) if g.appid == "7777777" else None,
+            steam_root=str(tmp / "steam"),     # no prefix dir -> prefix tier skips
+            settings=None,
+            bundled_db=real_db,
+        )
+        # Fictional appid -> NO curated row -> bundled tier absent -> the
+        # install-dir DLL probe (pass 1, Binaries/Win64 candidate) must decide.
+        g = Game(appid="7777777", name="Fictional UE5 Game",
+                 installdir="FictionalUE5Game")
+        cap = det.probe(g)
+    assert cap.dlss_sr.supported is True, cap.notes
+    assert cap.dlss_sr.source == FeatureSource.INSTALLDIR, cap.dlss_sr.source
+    assert cap.is_known() is True
+
+
+# ---- umbrella 4d: bounded walk fallback finds DLSS at an exotic path -------
+# Pass 2 (the os.walk fallback) must catch a DLL at a path pass 1 doesn't list
+# -- the whole point of the fallback is that curation + well-known dirs can't
+# cover every shipping layout. A vendored-plugin path proves the walk fires.
+def test_install_dir_probe_bounded_walk_finds_dlss_at_exotic_path() -> None:
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    tmp = Path(tempfile.mkdtemp())
+    install = tmp / "common" / "FictionalExoticGame"
+    exotic = install / "Plugins" / "VendorNV" / "Binaries" / "Win64"
+    exotic.mkdir(parents=True)
+    (exotic / "nvngx_dlss.dll").write_bytes(b"PE\x00\x00")
+    # a media subtree that the walk must prune (would otherwise be walked) --
+    # proves the prune set keeps the walk bounded without missing the DLL.
+    (install / "Content" / "Cinematics").mkdir(parents=True)
+    for i in range(3):
+        (install / "Content" / "Cinematics" / f"movie_{i}.bik").write_bytes(b"")
+    real_db = (Path(__file__).resolve().parent.parent / "src" / "nvidia_gui"
+               / "assets" / "nvidia_features.toml")
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda g: str(install) if g.appid == "8888888" else None,
+            steam_root=str(tmp / "steam"),
+            settings=None,
+            bundled_db=real_db,
+        )
+        g = Game(appid="8888888", name="Fictional Exotic Game",
+                 installdir="FictionalExoticGame")
+        cap = det.probe(g)
+    assert cap.dlss_sr.supported is True, cap.notes
+    assert cap.dlss_sr.source == FeatureSource.INSTALLDIR, cap.dlss_sr.source
+
+
 # ---- umbrella 5: ACF PARSER breadth across the game_corpus fixtures -------
 def test_acf_parser_breadth_multi_library_and_broken_manifest() -> None:
     import shutil

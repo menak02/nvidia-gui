@@ -20,6 +20,14 @@ rt = true
 note = "Path tracing + DLSS 3/4 frame generation + Reflex."
 
 [[games]]
+appid = "1285190"   # Borderlands 4
+dlss_sr = true
+dlss_fg = true
+reflex = true
+rt = true
+note = "Borderlands 4 - DLSS 4 SR+FG+MFG+RT (PCGamingWiki); Reflex 2 inferred from MFG."
+
+[[games]]
 appid = "2169040"   # Alan Wake 2
 dlss_sr = true
 dlss_fg = true
