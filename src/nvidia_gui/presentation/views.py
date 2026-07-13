@@ -9,9 +9,8 @@ set up by the main window.
 from __future__ import annotations
 
 import logging
-import pathlib
 import threading
-from typing import TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 import gi
 
@@ -1134,8 +1133,14 @@ class DisplayView:
 #  Drivers (read-only + link to Graphics)
 # ===========================================================================
 class DriversView:
-    def __init__(self, uc: "UseCases") -> None:
+    def __init__(self, uc: "UseCases",
+                 on_navigate: Callable[[str], None] | None = None) -> None:
         self.uc = uc
+        # OUT-of-rail navigation seam: the "Open DLSS page" button deep-links here
+        # rather than re-rendering the canonical cached-version list a third time.
+        # ``window.py`` passes ``self.sidebar.switch_to`` so the flip + the active-
+        # rail highlight stay in lockstep with the sidebar either way.
+        self._on_navigate = on_navigate
         self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self._build()
 
@@ -1157,19 +1162,32 @@ class DriversView:
         b.append(TextRow("modprobe.d config", info.modprobe_config_path or "—"))
         self._root.append(c)
 
-        # read-only cache summary — the download manager lives on the DLSS
-        # page now (single canonical Streamline surface). Listing the cached
-        # versions here is still useful as a glance at which swaps are seeded.
+        # DLSS cache glance — a SINGLE read-only count + a deep-link button, not
+        # the full re-render of the version list. The canonical cached-version
+        # surface lives on the DLSS page (single home); the Drivers page only
+        # shows which swaps are seeded at a glance + hops you there to manage.
         c2, b2 = _card("DLSS cache")
         versions = self.uc.list_dlss_versions()
         if versions:
-            for v in versions:
-                b2.append(TextRow(v.version, pathlib.Path(v.path).parent.name))
+            b2.append(TextRow("Cached versions", str(len(versions))))
         else:
-            b2.append(Gtk.Label(label="No versions cached. Manage the cache "
-                                      "from the DLSS page.", xalign=0))
-            b2.get_last_child().add_css_class("nvgui-muted")
+            hint = Gtk.Label(label="No versions cached yet.", xalign=0)
+            hint.add_css_class("nvgui-muted")
+            b2.append(hint)
+        openb = Gtk.Button(label="Open DLSS page")
+        openb.add_css_class("nvgui-btn-ghost")
+        openb.set_tooltip_text("Go to the DLSS page to download / swap / seed versions")
+        openb.set_halign(Gtk.Align.START)
+        openb.connect("clicked", self._on_open_dlss)
+        b2.append(openb)
         self._root.append(c2)
+
+    def _on_open_dlss(self, _b) -> None:
+        """Deep-link to the DLSS page via the out-of-rail nav seam. Guarded
+        (None when no window wired the seam -- a unit test) so it never crashes
+        an unwired view; the button still renders, just no-ops."""
+        if self._on_navigate is not None:
+            self._on_navigate("dlss")
 
     def refresh(self) -> None:
         _clear(self._root)
@@ -1183,8 +1201,14 @@ class DriversView:
 #  RTX (read-only RTX summary + honest feature parity - no download)
 # ===========================================================================
 class RtxView:
-    def __init__(self, uc: "UseCases") -> None:
+    def __init__(self, uc: "UseCases",
+                 on_navigate: Callable[[str], None] | None = None) -> None:
         self.uc = uc
+        # OUT-of-rail nav seam — same as DriversView; the "Open DLSS page"
+        # button replaces what used to be a second re-render of the cached
+        # version list (three surfaces for one source is the redundancy the
+        # audit flagged).
+        self._on_navigate = on_navigate
         self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self._build()
 
@@ -1192,26 +1216,26 @@ class RtxView:
         title = Gtk.Label(label="RTX"); title.add_css_class("nvgui-nav-title")
         title.set_xalign(0); self._root.append(title)
 
-        # Read-only glance at the managed cache — the download manager now
-        # lives on the DLSS page (single canonical Streamline surface). Kept
-        # here so the RTX page still shows which swap versions are seeded.
+        # DLSS cache glance — the canonical cached-version surface lives on
+        # the DLSS page (single home). Here we show a one-line count + a
+        # deep-link button, NOT a second re-render of the list (three surfaces
+        # for one source is the redundancy the audit flagged).
         c, b = _card("Cached DLSS versions",
                      "The managed swap cache. Fetch and manage versions on the "
-                     "DLSS page — this is a read-only glance.")
+                     "DLSS page — this is a read-only count + a quick jump.")
         versions = self.uc.list_dlss_versions()
         if versions:
-            for v in versions:
-                row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-                nm = Gtk.Label(label=v.version); nm.add_css_class("nvgui-row-label")
-                nm.set_hexpand(True)
-                row.append(nm)
-                row.append(pill("cached"))
-                b.append(row)
+            b.append(TextRow("Cached versions", str(len(versions))))
         else:
-            hint = Gtk.Label(label="No cached versions. Open the DLSS page to "
-                                   "fetch the latest Streamline release.")
-            hint.add_css_class("nvgui-muted"); hint.set_xalign(0); hint.set_wrap(True)
+            hint = Gtk.Label(label="No cached versions yet.", xalign=0, wrap=True)
+            hint.add_css_class("nvgui-muted")
             b.append(hint)
+        openb = Gtk.Button(label="Open DLSS page")
+        openb.add_css_class("nvgui-btn-ghost")
+        openb.set_tooltip_text("Go to the DLSS page to fetch / swap / seed versions")
+        openb.set_halign(Gtk.Align.START)
+        openb.connect("clicked", self._on_open_dlss)
+        b.append(openb)
         self._root.append(c)
 
         c2, b2 = _card("Honest feature parity",
@@ -1231,6 +1255,12 @@ class RtxView:
             desc = Gtk.Label(label=note, xalign=0, wrap=True)
             desc.add_css_class("nvgui-card-subtle"); b2.append(desc)
         self._root.append(c2)
+
+    def _on_open_dlss(self, _b) -> None:
+        """Deep-link to the DLSS page via the out-of-rail nav seam. Guarded
+        (None when no window wired it) so an unwired view never crashes."""
+        if self._on_navigate is not None:
+            self._on_navigate("dlss")
 
     def root(self) -> Gtk.Widget:
         return _scrolled(self._root)

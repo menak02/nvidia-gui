@@ -166,8 +166,8 @@ class MainWindow(Gtk.ApplicationWindow):
         self._games = GamesView(uc)
         self._graphics = GraphicsView(uc)
         self._display = DisplayView(uc)
-        self._drivers = DriversView(uc)
-        self._rtx = RtxView(uc)
+        self._drivers = DriversView(uc, on_navigate=self.sidebar.switch_to)
+        self._rtx = RtxView(uc, on_navigate=self.sidebar.switch_to)
         self._profiles = ProfilesView(uc)
         # The 7 original pages are CLASSES exposing .root(); the 2 new pages
         # (dlss, settings) are built by FACTORIES that return a Gtk.Widget
