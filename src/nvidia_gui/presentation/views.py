@@ -220,8 +220,16 @@ class DashboardView:
 #  Games (master + detail editor)
 # ===========================================================================
 class GamesView:
-    def __init__(self, uc: "UseCases") -> None:
+    def __init__(self, uc: "UseCases",
+                 on_status: "Callable[[str], None] | None" = None) -> None:
         self.uc = uc
+        # The transient-confirmation surface (the window's save toast), so a
+        # profile save -- fired by the Save button OR the Ctrl+S accelerator --
+        # shows visible feedback even when the Games page isn't the visible one.
+        # The persistent inline _status_label stays the permanent record on the
+        # page itself; the toast is the cross-page confirmation. Backward-
+        # compatible: None means inline-label-only (tests, older call sites).
+        self._on_status = on_status
         self._root = Gtk.Box()
         self._games: list[Game] = []
         self._sel: Game | None = None
@@ -941,6 +949,21 @@ class GamesView:
         p.extra_env = self._collect_extra_env()
         res = self.uc.save_profile(p)
         self._status_label.set_text(res.message if res.ok else f"save: {res.message}")
+        # Transient confirmation on success (mirrors the DLSS-page pattern): the
+        # toast carries the result to whatever page is currently visible. A
+        # failure stays on the persistent inline label only -- a toast that
+        # flashes and hides an error is worse than no signal (see views_dlss).
+        if res.ok and self._on_status is not None:
+            self._on_status(res.message)
+
+    def trigger_save(self) -> None:
+        """Commit the current per-game editor through the same path the Save
+        button takes. The ``win.save`` accelerator (Ctrl+S) calls this; both
+        paths end at ``_on_save`` so there's exactly one save seam. No-op when
+        no game is selected (``_on_save``'s own guard), so Ctrl+S off the Games
+        page with no pinned editor does nothing rather than surprising the user.
+        """
+        self._on_save(None)
 
 
 # ===========================================================================

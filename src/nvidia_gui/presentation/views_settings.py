@@ -102,14 +102,21 @@ _DISCLAIMER = (
 )
 
 
-def _open_about_dialog(parent: Gtk.Window | None, version: str) -> None:
-    """Show the GTK ``AboutDialog``. Modal + transient to *parent* so it stacks
-    over the app's own window on a multi-monitor setup (an unparented dialog
-    would float on the WM's focused monitor). Async via ``::response`` →
-    ``destroy()`` (``gtk_dialog_run`` is gone in GTK4); closing/ESC fires a
-    ``DELETE_EVENT``/``CLOSE`` response and the same ``destroy`` runs, so the
-    dialog is never leaked. Never raises -- a build/present fault is logged and
-    swallowed (a fault in an About box must never crash the settings page)."""
+def open_about_dialog(parent: Gtk.Window | None, version: str) -> None:
+    """Show the GTK ``AboutDialog``. Module-public so the F1 accelerator (in
+    window.py) and the Settings-page About button share one builder. Modal +
+    transient to *parent* so it stacks over the app's own window on a multi-
+    monitor setup (an unparented dialog would float on the WM's focused
+    monitor). Cleanup via ``close-request`` → ``destroy()`` -- NOT ``response``:
+    in GTK4 ``GtkAboutDialog`` is a direct ``Gtk.Window`` (no longer a
+    ``Gtk.Dialog``), so its Close button emits ``close-request`` (inherited from
+    ``GtkWindow``); the old ``::response`` signal lives only on the deprecated
+    ``Gtk.Dialog`` and would raise ``unknown signal name`` (see
+    ``test_about_dialog_close_request_signal_connectable``). Closing/ESC fires
+    the same ``close-request`` and ``destroy`` runs, so the dialog is never
+    leaked. Never raises -- a build/present fault is logged and swallowed (a
+    fault in an About box must never crash the settings page or disrupt an
+    accelerator)."""
     try:
         dlg = Gtk.AboutDialog.new()
         dlg.set_program_name("NVIDIA-GUI")
@@ -124,7 +131,7 @@ def _open_about_dialog(parent: Gtk.Window | None, version: str) -> None:
         if parent is not None:
             dlg.set_transient_for(parent)
         dlg.set_modal(True)
-        dlg.connect("response", lambda d, _id: d.destroy())
+        dlg.connect("close-request", lambda d: d.destroy())
         dlg.present()
     except Exception as exc:  # noqa: BLE001 -- About box must never crash settings
         import logging
@@ -248,7 +255,7 @@ def build_settings_view(uc: "UseCases",
     about_btn.set_margin_top(6)
     about_btn.set_halign(Gtk.Align.START)
     about_btn.connect("clicked",
-                      lambda b: _open_about_dialog(toplevel_of(b), vstr))
+                      lambda b: open_about_dialog(toplevel_of(b), vstr))
     about_body.append(about_btn)
 
     # license line uses widgets.pill (the nvgui-pill badge class)

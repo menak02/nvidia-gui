@@ -9,7 +9,7 @@ import time
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import GLib, Gtk  # noqa: E402
+from gi.repository import Gio, GLib, Gtk  # noqa: E402
 
 from .icons import icon  # noqa: E402
 from .views import (  # noqa: E402
@@ -22,7 +22,7 @@ from .views import (  # noqa: E402
     RtxView,
 )
 from .views_dlss import build_dlss_view  # noqa: E402
-from .views_settings import build_settings_view  # noqa: E402
+from .views_settings import build_settings_view, open_about_dialog  # noqa: E402
 from .widgets import Debouncer, NavSidebar, SaveToast  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -163,7 +163,9 @@ class MainWindow(Gtk.ApplicationWindow):
         # build views lazily so each only constructs its widgets once
         self._views: dict = {}
         self._dashboard = DashboardView(uc)
-        self._games = GamesView(uc)
+        # on_status routes save confirmations to the toast, so Ctrl+S (or the
+        # Save button) flashes a transient result even off the Games page.
+        self._games = GamesView(uc, on_status=self._push_status)
         self._graphics = GraphicsView(uc)
         self._display = DisplayView(uc)
         self._drivers = DriversView(uc, on_navigate=self.sidebar.switch_to)
@@ -242,6 +244,14 @@ class MainWindow(Gtk.ApplicationWindow):
         # an initial synchronous snapshot so the dashboard isn't empty for 1.5s
         GLib.idle_add(self._on_snapshot, uc.snapshot())
         GLib.idle_add(self._initial_load)
+        # ---- keyboard accelerators (window-scoped win.* GActions) ----------
+        # Registered AFTER self.set_child/main so every delegate target exists
+        # (the sidebar, the views, the toast). One action per accel; bound via
+        # Gtk.Application.set_accels_for_action so GTK labels them in
+        # gtk4-inspector + the shortcuts window. ApplicationWindow IS a
+        # GActionMap, so add_action lands the win.* name here; the app binds the
+        # keystroke. See _setup_accels for the per-action bindings.
+        self._setup_accels(app)
 
     # ---- animations tier -------------------------------------------------
     def _on_anim_changed(self, tier: str) -> None:
@@ -276,6 +286,66 @@ class MainWindow(Gtk.ApplicationWindow):
         Views get a bound callback, never the toast object — so a view can't
         assume anything about the widget that happens to mount the message."""
         self.toast.show(message)
+
+    # ---- keyboard accelerators ----------------------------------------------
+    def _setup_accels(self, app) -> None:
+        """Bind keyboard accelerators to window-scoped ``win.*`` GActions.
+
+        GTK4 replaced ``GtkAccelGroup`` with the GAction model: each
+        ``Gio.SimpleAction`` is hosted on this ``Gtk.ApplicationWindow`` (which
+        IS a ``GActionMap``), and the ``Gtk.Application`` maps keystrokes to
+        them via ``set_accels_for_action``. One action per accel keeps the
+        bindings explicit and discoverable in gtk4-inspector (a parameterised
+        action would need ``GVariant`` targets — more moving parts for 9 fixed
+        pages). Every handler delegates to an EXISTING method so there's one
+        real code path per operation (``sidebar.switch_to``, games scan/save,
+        the About dialog); the accelerator never re-implements behaviour. The
+        Ctrl+N page lambda pins ``name=pname`` by default-arg so the loop
+        binding doesn't collapse to the last page for all 9 (Python's late-
+        binding-on-closures trap).
+        """
+        def _mk(name, handler, accels):
+            act = Gio.SimpleAction.new(name, None)  # stateless, no GVariant param
+            act.connect("activate", handler)
+            self.add_action(act)
+            app.set_accels_for_action(f"win.{name}", list(accels))
+
+        _mk("scan", self._act_scan, ["<Control>R"])
+        _mk("save", self._act_save, ["<Control>S"])
+        _mk("about", self._act_about, ["F1"])
+        _mk("escape", self._act_escape, ["Escape"])
+        for i, (pname, _label, _icon) in enumerate(_PAGES, start=1):
+            _mk(f"page{i}",
+                lambda _a, _p, name=pname: self.sidebar.switch_to(name),
+                [f"<Control>{i}"])
+
+    def _act_scan(self, _action, _param) -> None:
+        """Ctrl+R — the same guarded async scan the Scan button runs. The
+        ``GamesView.refresh`` ``_scanning`` guard stops a re-trigger into a
+        thread pile-up if Ctrl+R is held."""
+        self._games.refresh()
+
+    def _act_save(self, _action, _param) -> None:
+        """Ctrl+S — commit the current Games editor through the single save
+        seam (the Save button's own path). A no-op when no game is selected, so
+        Ctrl+S off the Games page with no pinned editor surprises nobody."""
+        self._games.trigger_save()
+
+    def _act_about(self, _action, _param) -> None:
+        """F1 — the About dialog (program, version, license, credits). Parent
+        is this window so the modal stacks over the app on a multi-monitor
+        setup; ``open_about_dialog`` never raises, so a fault here can't strand
+        an accelerator."""
+        open_about_dialog(self, self.uc.version())
+
+    def _act_escape(self, _action, _param) -> None:
+        """Esc — fold the overlay hamburger popover if it's open. Modal dialogs
+        (About, the confirm AlertDialogs) own their own Escape handling — they
+        close on Esc — so this only fires when the popover is the topmost
+        interactive surface, never clobbering a dialog's own Escape."""
+        popover = self._menubtn.get_popover()
+        if popover is not None:
+            popover.popdown()
 
     def _on_page_changed(self, stack, _pspec) -> None:
         """Persist ``presentation.active_page`` on every page switch.

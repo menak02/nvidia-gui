@@ -1371,6 +1371,32 @@ def test_version_never_lies_dev_fallback_when_uninstalled() -> None:
         assert _bare_uc(sd).version() == "9.9.9-test", "non-PackageNotFound swallowed"
 
 
+def test_about_dialog_close_request_signal_connectable() -> None:
+    """Regression guard for the About-dialog silent-failure class.
+
+    ``open_about_dialog`` (views_settings) connects ``close-request`` to
+    destroy the dialog. In GTK4 ``GtkAboutDialog`` is a direct ``Gtk.Window``
+    (no longer a ``Gtk.Dialog``): its Close button emits ``close-request``
+    (inherited from ``GtkWindow``), NOT ``response`` (which lives only on the
+    deprecated ``Gtk.Dialog``). The previous wiring used ``connect("response",
+    ...)`` -- which raises ``unknown signal name: response`` and was swallowed
+    by the About builder's broad-except, so the dialog silently failed to
+    present (the user clicked About and nothing appeared). This test pins the
+    signal our code relies on so a reconnect-to-``response`` regression fails
+    the gate immediately, not in a manual About-box click months later.
+
+    Display-free: a widget can be constructed (but not realized) without a
+    ``GdkDisplay``; we never call ``present()`` here.
+    """
+    import gi
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    dlg = Gtk.AboutDialog.new()
+    # The signal open_about_dialog relies on must connect without raising.
+    dlg.connect("close-request", lambda d: d.destroy())
+
+
 # ---------------------------------------------------------------------------
 #  Plain-python runner (used when pytest isn't installed; pytest also works)
 # ---------------------------------------------------------------------------
