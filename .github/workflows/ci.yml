@@ -1,0 +1,139 @@
+# CI for nvidia-gui — runs on every push and pull request.
+#
+# Why apt + system python3, NOT pip + setup-python:
+#   nvidia-gui binds to GTK4 via PyGObject (`gi`). The `gi` module + its
+#   typelibs (Gtk-4.0.typelib) are shipped by the DISTRO, not by PyPI — pip-
+#   installing PyGobject needs dev headers and never carries the typelib, so a
+#   pip-driven interpreter can't `import gi; gi.require_version('Gtk','4.0')`.
+#   So we install `python3-gi` + `gir1.2-gtk-4.0` from apt and use the runner's
+#   system Python (the gi bindings only attach to THAT interpreter).
+#
+# The GTK4 smoke needs a display to realise a Gtk.ApplicationWindow — provided
+# here by Xvfb (no display server exists on the CI runner by default).
+#
+# No secrets are required: this is a public repo gating pure-Python tests, a
+# 5-second headless smoke, the hexagonal seam, an emoji contract, and AppStream
+# metainfo validity.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GTK4 + PyGObject + Xvfb + AppStream from apt
+        run: |
+          sudo apt-get update
+          # python3-gi      — PyGObject bindings for the SYSTEM python3 (the
+          #                   runner's default interpreter). NOT pip-installable.
+          # gir1.2-gtk-4.0  — the GTK 4.x typelib gi loads at require_version.
+          # xvfb           — a virtual X display so the GTK app can realise a
+          #                   window for the 5s smoke (no real display in CI).
+          # appstream       — ships `appstreamcli` to validate the metainfo.
+          sudo apt-get install -y --no-install-recommends \
+            python3-gi \
+            gir1.2-gtk-4.0 \
+            xvfb \
+            appstream
+
+      - name: Verify gi + GTK4 import under the system Python
+        run: |
+          python3 - <<'PY'
+          import gi
+          gi.require_version("Gtk", "4.0")
+          from gi.repository import Gtk
+          print("gi GTK4 import OK:", Gtk.get_major_version(),
+                Gtk.get_minor_version(), Gtk.get_micro_version())
+          PY
+
+      # ---- 1. Headless service tests -------------------------------------
+      # The test file carries its own plain-Python runner (works with or without
+      # pytest); exit 0 == every test_* passed. A couple of tests construct GTK
+      # widgets WITHOUT present() (display-free construction), so no display is
+      # needed here — but Xvfb is available regardless.
+      - name: Run headless service tests
+        run: PYTHONPATH=src python3 tests/test_services.py
+
+      # ---- 2. 5-second smoke (must be timeout-killed, rc 124) -------------
+      # The app is launched under Xvfb; `timeout -k 2 5` SIGTERMs it at 5s and
+      # SIGKILLs at 7s if it ignores SIGTERM. A clean smoke returns 124 (SIGTERM
+      # won the race). A crash returns non-124 and fails the gate. We also
+      # assert at most 4 INFO lines (app/theme/ipc socket) and ZERO
+      # Gtk-WARNING / Theme parser error — the latter silently drops a CSS
+      # effects layer, the whole class the crash-safe CSS contract guards.
+      - name: 5-second smoke (rc 124, ≤4 INFO, zero CSS/parser warnings)
+        run: |
+          set +e
+          out="$(xvfb-run -a env PYTHONPATH=src timeout -k 2 5 python3 src/main.py 2>&1)"
+          rc=$?
+          set -e
+          echo "$out"
+          echo "smoke exit code: $rc"
+          if [ "$rc" -ne 124 ]; then
+            echo "FAIL: expected timeout-kill rc 124, got $rc (app crashed or exited early)"
+            exit 1
+          fi
+          info_count=$(printf '%s\n' "$out" | grep -c '\[INFO\]' || true)
+          if [ "$info_count" -gt 4 ]; then
+            echo "FAIL: expected at most 4 INFO lines, got $info_count"
+            exit 1
+          fi
+          if printf '%s\n' "$out" | grep -E 'Gtk-WARNING|Theme parser error|Pango-WARNING|GLib-GObject-WARNING'; then
+            echo "FAIL: GTK/CSS parser warnings present (an effects layer would silently drop)"
+            exit 1
+          fi
+          echo "smoke OK (rc 124, $info_count INFO, zero parser warnings)"
+
+      # ---- 3. Hexagonal purity -------------------------------------------
+      # The presentation layer MUST NOT import any adapter directly — it
+      # reaches them only through the UseCases facade (the hexagonal seam the
+      # whole architecture rests on). A breached seam fails the gate.
+      - name: Hexagonal purity (presentation imports zero adapters)
+        run: |
+          if grep -RE "from nvidia_gui.adapters|import nvidia_gui.adapters" src/nvidia_gui/presentation; then
+            echo "FAIL: presentation imports an adapter (hexagonal seam breach)"
+            exit 1
+          fi
+          echo "hexagonal purity OK"
+
+      # ---- 4. No-emoji contract ------------------------------------------
+      # The app-wide no-emoji contract: original SVG line-icons only, never
+      # emoji glyphs (consistency + font-fallback surprises). Scans every
+      # Python source under src/nvidia_gui for emoji/symbol-range codepoints.
+      - name: No-emoji scan across the package
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, sys
+          emoji = re.compile(
+              r'[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F000-\U0001F9FF]'
+          )
+          hits = 0
+          for p in pathlib.Path('src/nvidia_gui').rglob('*.py'):
+              for i, line in enumerate(
+                  p.read_text(encoding='utf-8', errors='ignore').splitlines(), 1):
+                  if emoji.search(line):
+                      print(f'{p}:{i}: {line.strip()[:60]}')
+                      hits += 1
+          if hits:
+              print(f'FAIL: {hits} emoji codepoint(s) found')
+              sys.exit(1)
+          print('no-emoji scan OK')
+          PY
+
+      # ---- 5. AppStream metainfo validity --------------------------------
+      # The catalog metadata software centers read. Validated at author time
+      # with appstreamcli --pedantic; re-validated here so a malformed release
+      # / url / developer-id can't land on main.
+      - name: Validate AppStream metainfo
+        run: |
+          appstreamcli validate --no-net --pedantic \
+            data/metainfo/org.mena.nvidia-gui.metainfo.xml
