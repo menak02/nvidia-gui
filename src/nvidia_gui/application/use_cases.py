@@ -340,10 +340,14 @@ class UseCases:
 
     # ---- profile export / import --------------------------------------------
     def export_profiles(self, path: str) -> tuple[bool, str]:
-        """Serialize all profiles + relevant settings to the target path.
+        """Serialize all saved per-game profiles to the target path.
 
-        Returns (ok, message). Overwrites existing files. The format is TOML
-        (the project's config format) for human-editability.
+        Returns (ok, message). Overwrites existing files. The format is JSON for
+        lossless dict round-tripping (the per-game TOML store is the on-disk
+        source of truth; this is a portable single-file snapshot for backup /
+        transfer between machines). Only profiles that actually exist on disk
+        (``profiles.has``) are included — we never fabricate rows for games with
+        only the default profile.
         """
         import json
         try:
