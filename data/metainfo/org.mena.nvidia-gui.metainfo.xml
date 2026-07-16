@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metainfo for org.mena.nvidia-gui.
+
+  Trademark (nominative use): this project is unaffiliated with NVIDIA
+  Corporation. "NVIDIA", "GeForce", "RTX", and "DLSS" are trademarks of
+  NVIDIA Corp. and are used here only as feature labels, not as a claim of
+  endorsement or affiliation. The project ships NO NVIDIA binaries.
+-->
+<component type="desktop-application">
+  <id>org.mena.nvidia-gui</id>
+
+  <!-- The metainfo document itself is liberally licensed so distros can
+       redistribute + modify the catalog text; the project is MIT. -->
+  <metadata_license>FSFAP</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>NVIDIA-GUI</name>
+  <summary>Linux NVIDIA GPU control center — telemetry, DLSS overrides, per-game tuning</summary>
+
+  <description>
+    <p>
+      A community, vendor-unaffiliated Linux GPU control center: live telemetry,
+      driver and kernel-module controls, DLSS overrides, and per-game launch
+      injection. Wayland/X11-native GTK4; runs no proprietary daemon of its own.
+    </p>
+    <p>
+      Per-game PROTON environment injection stamps launch options so toggles
+      actually take effect; never-lie per-game feature detection reports DLSS-SR,
+      Frame Gen, Reflex, and Ray Tracing as supported / unsupported / unknown
+      with provenance instead of guessing. Kernel-module tuning covers Resizable
+      BAR and persistence mode, and the CSS pipeline is crash-safe-tuned for the
+      NVIDIA Wayland compositor (solid fills, no blur/gradient stalls).
+    </p>
+    <p>
+      Unaffiliated with NVIDIA Corporation. NVIDIA, GeForce, RTX, and DLSS are
+      trademarks of NVIDIA Corporation, used nominatively here as feature labels.
+    </p>
+  </description>
+
+  <!-- The native launcher entry; the .desktop file ships as nvidia-gui.desktop
+       (not the reverse-DNS app id), so the launchable desktop-id is the file
+       basename, not "org.mena.nvidia-gui.desktop". -->
+  <launchable type="desktop-id">nvidia-gui.desktop</launchable>
+
+  <url type="homepage">https://github.com/menak02/nvidia-gui</url>
+  <url type="bugtracker">https://github.com/menak02/nvidia-gui/issues</url>
+
+  <!-- Reverse-DNS developer id derived from the GitHub origin (no own domain).
+       GitHub username is menak02; io.github.menak02 is the conventional ID. -->
+  <developer id="io.github.menak02">
+    <name>mena</name>
+  </developer>
+
+  <!-- A settings/system utility: no content concerns, so every OARS-1.1
+       attribute is left at its "none" default (omitted == none). -->
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="1.0.0" date="2026-07-11">
+      <description>
+        <p>Initial public release: 9-page sidebar, per-game profiles, DLSS
+        cache/swap, kernel-module + persistence controls, feature detection,
+        async scan, keyboard accelerators, and crash-safe animations tiers.</p>
+      </description>
+    </release>
+  </releases>
+
+  <provides>
+    <binary>nvidia-gui</binary>
+  </provides>
+
+  <categories>
+    <category>Settings</category>
+    <category>HardwareSettings</category>
+  </categories>
+
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </recommends>
+</component>

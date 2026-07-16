@@ -27,6 +27,11 @@ BINDIR="${INSTALL_BINDIR:-${PREFIX}/bin}"
 LIBEXEC="${INSTALL_LIBEXEC:-${PREFIX}/libexec}"
 APPS_DIR="${INSTALL_APPS_DIR:-${PREFIX}/share/applications}"
 ICONS_DIR="${PREFIX}/share/icons/hicolor/scalable/apps"
+# AppStream metainfo (catalog metadata — summary, release notes, OARS). Newest
+# AppStream (1.19+) prefers metainfo under /usr/share/metainfo; older
+# appstream-glib installs read /usr/share/appdata. Write to metainfo (the
+# current canonical path) — install.sh targets a fixed distro, not both.
+METAINFO_DIR="${PREFIX}/share/metainfo"
 POLKIT_ACTIONS="${PREFIX}/share/polkit-1/actions"
 POLKIT_RULES="/etc/polkit-1/rules.d"
 MODPROBED="/etc/modprobe.d"
@@ -58,7 +63,7 @@ install_system_bits() {
     c_step "Installing privileged system files (as root)"
 
     install -d -m 0755 "$LIBEXEC" "$POLKIT_ACTIONS" "$POLKIT_RULES" \
-                     "$APPS_DIR" "$ICONS_DIR" "$MODPROBED"
+                     "$APPS_DIR" "$ICONS_DIR" "$METAINFO_DIR" "$MODPROBED"
 
     # dedicated polkit action + rules so the app's runtime elevation names us
     install -m 0644 "$HERE/data/polkit/org.mena.${APP}.policy" \
@@ -76,6 +81,12 @@ install_system_bits() {
     install -m 0644 "$HERE/data/applications/${APP}.desktop" "$APPS_DIR/${APP}.desktop"
     install -m 0644 "$HERE/data/icons/${APP}.svg" "$ICONS_DIR/${APP}.svg"
     c_ok "desktop entry + icon → ${APPS_DIR}, ${ICONS_DIR}"
+
+    # AppStream metainfo (catalog metadata — summary, release notes, OARS).
+    # Validator-clean (appstreamcli) at author time; distro caches pick it up.
+    install -m 0644 "$HERE/data/metainfo/org.mena.${APP}.metainfo.xml" \
+                    "$METAINFO_DIR/org.mena.${APP}.metainfo.xml"
+    c_ok "metainfo → ${METAINFO_DIR}"
 
     # kernel-module skeleton — only if NOT already present (never clobber tuning)
     if [ -f "${MODPROBED}/${APP}.conf" ]; then
@@ -96,6 +107,15 @@ CONF
     fi
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "$(dirname "$ICONS_DIR")/.." 2>/dev/null || true
+    fi
+    # Refresh the AppStream cache so software centers surface the app at once.
+    # `appstreamcli refresh-cache --verbose` exists on AppStream ≥ 0.12;
+    # `update-appstream-cache` is the appstream-glib-era equivalent. Both are
+    # best-effort (the distro builder also picks metainfo up at package time).
+    if command -v appstreamcli >/dev/null 2>&1; then
+        appstreamcli refresh-cache --verbose >/dev/null 2>&1 || true
+    elif command -v update-appstream-cache >/dev/null 2>&1; then
+        update-appstream-cache >/dev/null 2>&1 || true
     fi
     if command -v systemctl >/dev/null 2>&1; then
         systemctl reload polkit 2>/dev/null || \
