@@ -48,6 +48,7 @@ from nvidia_gui.adapters.config_toml import _dump_toml  # noqa: E402
 from nvidia_gui.adapters.gpu_query_sm import NvidiaSmiGpu  # noqa: E402
 from nvidia_gui.adapters.kernel_param_modprobe import _render, ModprobeKernelParam  # noqa: E402
 from nvidia_gui.adapters.launch_option_steam import SteamLaunchOptions  # noqa: E402
+from nvidia_gui.adapters.profile_store_fs import FsProfileStore  # noqa: E402
 from nvidia_gui.adapters.vdf_lite import loads, dumps  # noqa: E402
 
 
@@ -1369,6 +1370,137 @@ def test_version_never_lies_dev_fallback_when_uninstalled() -> None:
     #    propagates into the UI.
     with mock.patch.object(md, "version", side_effect=RuntimeError("boom")):
         assert _bare_uc(sd).version() == "9.9.9-test", "non-PackageNotFound swallowed"
+
+
+# ---------------------------------------------------------------------------
+#  ProfileStorePort.has() — efficient existence check for saved-profile badges
+# ---------------------------------------------------------------------------
+def test_profile_store_has_returns_false_when_no_file() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        env_dir = Path(td) / "env"
+        profile_dir = Path(td) / "profiles"
+        store = FsProfileStore(env_dir, profile_dir)
+        # No file created yet -> False
+        assert store.has("123") is False
+
+
+def test_profile_store_has_returns_true_when_file_exists() -> None:
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        env_dir = Path(td) / "env"
+        profile_dir = Path(td) / "profiles"
+        store = FsProfileStore(env_dir, profile_dir)
+        # Create the profile file by saving
+        p = GameProfile(appid="456")
+        p.enable_nvapi = True
+        store.save(p)
+        assert store.has("456") is True
+        # Other appids still False
+        assert store.has("789") is False
+
+
+# ---------------------------------------------------------------------------
+#  Profile export / import round-trip
+# ---------------------------------------------------------------------------
+def test_export_import_profiles_round_trip() -> None:
+    """Export saves per-game profiles to JSON; import reads them back into a
+    fresh store, limited to games present in the library. Proves the serialize/
+    deserialize path preserves the toggles a user actually set."""
+    import tempfile
+    from nvidia_gui.adapters.profile_store_fs import FsProfileStore
+    from nvidia_gui.application.use_cases import UseCases
+
+    game_a = Game(appid="100", name="Game A", installdir="gamea")
+    game_b = Game(appid="200", name="Game B", installdir="gameb")
+
+    class _Library:
+        def scan(self):
+            return [game_a, game_b]
+
+    class _OkLaunch:
+        def ensure_wrapper(self, appid, env_file):  # noqa: ANN001
+            return True
+
+        def remove_wrapper(self, appid):  # noqa: ANN001
+            return True
+
+    with tempfile.TemporaryDirectory() as td:
+        store = FsProfileStore(Path(td) / "env", Path(td) / "profiles")
+        uc = UseCases(
+            gpu=None, driver=None, display=None, games=_Library(),
+            profiles=store, launch=_OkLaunch(),
+            dlss_cache=None, dlss_swap=None, kernel=None, diagnostics=None)
+
+        # Save two profiles with distinct toggles
+        pa = GameProfile(appid="100")
+        pa.enable_rtx = True
+        pa.enable_reflex = True
+        # B is left unsaved -> should NOT appear in the export
+        assert uc.save_profile(pa).ok is True
+
+        export_path = str(Path(td) / "export.json")
+        ok, msg = uc.export_profiles(export_path)
+        assert ok is True, msg
+        assert "1 profile" in msg
+
+        # The export file is valid JSON with exactly one profile (B unsaved)
+        import json
+        data = json.loads(Path(export_path).read_text())
+        ids = [row["appid"] for row in data["profiles"]]
+        assert ids == ["100"]
+
+        # Wipe the store, then import back
+        for f in (Path(td) / "profiles").glob("*.toml"):
+            f.unlink()
+        assert store.has("100") is False
+
+        ok, msg = uc.import_profiles(export_path)
+        assert ok is True, msg
+        assert "1 profile" in msg
+        # Reload + confirm the toggles survived the round trip
+        loaded = store.load("100")
+        assert loaded.enable_rtx is True
+        assert loaded.enable_reflex is True
+
+
+def test_import_profiles_skips_games_not_in_library() -> None:
+    """Import merges per-game; a profile whose appid isn't in the library is
+    skipped (not silently written for a game the user doesn't own)."""
+    import tempfile
+    from nvidia_gui.adapters.profile_store_fs import FsProfileStore
+    from nvidia_gui.application.use_cases import UseCases
+
+    class _Library:
+        def scan(self):
+            return [Game(appid="100", name="Game A", installdir="gamea")]
+
+    class _OkLaunch:
+        def ensure_wrapper(self, appid, env_file):  # noqa: ANN001
+            return True
+
+        def remove_wrapper(self, appid):  # noqa: ANN001
+            return True
+
+    with tempfile.TemporaryDirectory() as td:
+        store = FsProfileStore(Path(td) / "env", Path(td) / "profiles")
+        uc = UseCases(
+            gpu=None, driver=None, display=None, games=_Library(),
+            profiles=store, launch=_OkLaunch(),
+            dlss_cache=None, dlss_swap=None, kernel=None, diagnostics=None)
+
+        # Hand-craft an export containing an appid the library lacks (999)
+        import json
+        path = str(Path(td) / "exp.json")
+        Path(path).write_text(json.dumps({"profiles": [
+            {"appid": "100", "enable_rtx": True},
+            {"appid": "999", "enable_rtx": True},
+        ]}))
+        ok, msg = uc.import_profiles(path)
+        assert ok is True
+        assert "1 profile" in msg  # only 100 imported, 999 skipped
+        assert store.has("100") is True
+        assert store.has("999") is False
 
 
 def test_about_dialog_close_request_signal_connectable() -> None:

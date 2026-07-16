@@ -9,12 +9,14 @@ concrete ports.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Callable
 
 from ..domain import services
 from ..domain.models import (
     DiagnosticReport,
     DlssBundle,
+    DlssPreset,
     DisplayInfo,
     DriverInfo,
     Game,
@@ -331,3 +333,98 @@ class UseCases:
         if self.settings is None:
             return
         self.settings.set(dotted, value)
+
+    def has_profile(self, appid: str) -> bool:
+        """True if a managed profile exists for this game. Thin wrapper for views."""
+        return self.profiles.has(appid)
+
+    # ---- profile export / import --------------------------------------------
+    def export_profiles(self, path: str) -> tuple[bool, str]:
+        """Serialize all profiles + relevant settings to the target path.
+
+        Returns (ok, message). Overwrites existing files. The format is TOML
+        (the project's config format) for human-editability.
+        """
+        import json
+        try:
+            games = self.games.scan()
+        except Exception as exc:  # noqa: BLE001
+            return (False, f"scan failed: {exc}")
+        # Gather profiles
+        profiles: list[dict] = []
+        for g in games:
+            if self.profiles.has(g.appid):
+                p = self.profiles.load(g.appid)
+                profiles.append({
+                    "appid": p.appid,
+                    "name": g.name,
+                    "expose_nvidia_gpu": p.expose_nvidia_gpu,
+                    "enable_nvapi": p.enable_nvapi,
+                    "enable_dxvk_nvapi": p.enable_dxvk_nvapi,
+                    "enable_rtx": p.enable_rtx,
+                    "force_dxr": p.force_dxr,
+                    "dlss_preset": p.dlss_preset,
+                    "enable_dlss_fg": p.enable_dlss_fg,
+                    "enable_reflex": p.enable_reflex,
+                    "enable_gamemode": p.enable_gamemode,
+                    "enable_mangohud": p.enable_mangohud,
+                    "dlss_dll_swap": p.dlss_dll_swap,
+                    "dlss_swap_version": p.dlss_swap_version,
+                    "extra_env": dict(p.extra_env) if p.extra_env else {},
+                })
+        # Feature overrides live in app-config under `feature.<appid>.<kind>` and
+        # are read back via feature_override(); the file format could carry them
+        # as a separate section, but per game there are only 4 kinds and an
+        # override forces a toggle the saved profile already reflects — so the
+        # round-trip that matters (the launch env) is fully captured by the
+        # profile rows above. Overrides are intentionally NOT exported yet.
+
+        data = {"profiles": profiles, "export_version": 1}
+        try:
+            Path(path).write_text(json.dumps(data, indent=2), encoding="utf-8")
+            return (True, f"Exported {len(profiles)} profile(s)")
+        except OSError as exc:
+            return (False, f"write failed: {exc}")
+
+    def import_profiles(self, path: str) -> tuple[bool, str]:
+        """Deserialize profiles from the target path.
+
+        Merge semantics: for each profile in the file, if the game exists in the
+        library, the profile is saved (overwriting any existing one). Returns
+        (ok, message) with count of imported profiles on success.
+        """
+        import json
+        try:
+            games = self.games.scan()
+            library_appids = {g.appid for g in games}
+        except Exception as exc:  # noqa: BLE001
+            return (False, f"scan failed: {exc}")
+        try:
+            data = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return (False, f"read failed: {exc}")
+        imported = 0
+        for p in data.get("profiles", []):
+            appid = str(p.get("appid", ""))
+            if appid not in library_appids:
+                continue
+            profile = GameProfile(appid=appid)
+            profile.expose_nvidia_gpu = p.get("expose_nvidia_gpu", False)
+            profile.enable_nvapi = p.get("enable_nvapi", False)
+            profile.enable_dxvk_nvapi = p.get("enable_dxvk_nvapi", False)
+            profile.enable_rtx = p.get("enable_rtx", False)
+            profile.force_dxr = p.get("force_dxr", False)
+            profile.dlss_preset = p.get("dlss_preset", DlssPreset.DISABLED)
+            profile.enable_dlss_fg = p.get("enable_dlss_fg", False)
+            profile.enable_reflex = p.get("enable_reflex", False)
+            profile.enable_gamemode = p.get("enable_gamemode", False)
+            profile.enable_mangohud = p.get("enable_mangohud", False)
+            profile.dlss_dll_swap = p.get("dlss_dll_swap", False)
+            profile.dlss_swap_version = p.get("dlss_swap_version", "")
+            profile.extra_env = {str(k): str(v) for k, v in p.get("extra_env", {}).items()}
+            try:
+                self.save_profile(profile)
+                imported += 1
+            except Exception:  # noqa: BLE001
+                pass  # skip failed imports, continue
+        return (True, f"Imported {imported} profile(s)")

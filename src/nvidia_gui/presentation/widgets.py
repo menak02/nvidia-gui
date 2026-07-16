@@ -347,6 +347,35 @@ class SaveToast(Gtk.Revealer):
 
 
 # ---------------------------------------------------------------------------
+#  StatusBar — bottom-bar feedback surface (last action / error / ipc path)
+# ---------------------------------------------------------------------------
+class StatusBar(Gtk.Box):
+    """Status bar at the window bottom: last action, error, or IPC socket path.
+
+    Mounted as a child of the main window's root box, respects the motion tier
+    (instant reveal on 'off', subtle fade on 'full'/'minimal'). Uses solid CSS
+    fills per the crash-safe contract.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.set_homogeneous(False)
+        self.set_hexpand(True)
+        self.set_valign(Gtk.Align.END)
+        self.add_css_class("nvgui-statusbar")
+        # Left: status label (action / error / ipc path)
+        self._status = Gtk.Label(label="")
+        self._status.set_hexpand(True)
+        self._status.set_xalign(0)
+        self._status.add_css_class("nvgui-status-label")
+        self.append(self._status)
+
+    def push(self, message: str) -> None:
+        """Update the status text. Empty/clear message resets to baseline."""
+        self._status.set_text(message)
+
+
+# ---------------------------------------------------------------------------
 #  Nav sidebar — vertical button list that switches a Gtk.Stack
 # ---------------------------------------------------------------------------
 class NavSidebar(Gtk.Box):

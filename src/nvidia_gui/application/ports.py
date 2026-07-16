@@ -78,6 +78,18 @@ class ProfileStorePort(ABC):
     @abstractmethod
     def env_file_path(self, appid: str) -> str:
         """Absolute path to the sourced env-file (for the wrapper line)."""
+        ...
+
+    @abstractmethod
+    def has(self, appid: str) -> bool:
+        """True iff a managed profile TOML exists on disk for *appid*.
+
+        The at-a-glance 'this game already has a profile' signal, read WITHOUT
+        loading+deserialising the whole profile (the badge/list just needs the
+        boolean, not the fields). Presentation reaches this through
+        :meth:`UseCases.has_profile` so it never stats the adapter's files
+        directly (hexagonal: presentation depends on use cases, never adapters).
+        """
 
 
 class LaunchOptionPort(ABC):

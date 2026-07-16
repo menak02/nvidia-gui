@@ -349,3 +349,20 @@ button:active:focus-visible,
     color: #bdf33b;
     font-weight: 700;
 }
+
+/* =========================================================== Status bar
+ * A persistent bottom strip (widgets.StatusBar) showing the last
+ * action / error / IPC socket path. Solid fills + hairline border per the
+ * crash-safe contract: nothing for the compositor to blur or gradient. Sits
+ * above the save toast in the window box so it always reserves its line.
+ */
+.nvgui-statusbar {
+    background: #0e0e0e;
+    border-top: 1px solid #232323;
+    padding: 4px 14px;
+}
+
+.nvgui-status-label {
+    color: #9a9a9a;
+    font-size: 0.82rem;
+}

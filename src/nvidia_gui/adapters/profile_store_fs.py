@@ -96,3 +96,7 @@ class FsProfileStore(ProfileStorePort):
 
     def env_file_path(self, appid: str) -> str:
         return str(self._env_dir / f"{appid}.env")
+
+    def has(self, appid: str) -> bool:
+        """True iff a managed profile TOML exists on disk for *appid*."""
+        return (self._profile_dir / f"{appid}.toml").is_file()

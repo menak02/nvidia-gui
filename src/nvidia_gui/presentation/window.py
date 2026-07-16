@@ -23,7 +23,7 @@ from .views import (  # noqa: E402
 )
 from .views_dlss import build_dlss_view  # noqa: E402
 from .views_settings import build_settings_view, open_about_dialog  # noqa: E402
-from .widgets import Debouncer, NavSidebar, SaveToast  # noqa: E402
+from .widgets import Debouncer, NavSidebar, SaveToast, StatusBar  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -170,7 +170,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self._display = DisplayView(uc)
         self._drivers = DriversView(uc, on_navigate=self.sidebar.switch_to)
         self._rtx = RtxView(uc, on_navigate=self.sidebar.switch_to)
-        self._profiles = ProfilesView(uc)
+        self._profiles = ProfilesView(uc, on_status=self._push_status)
         # The 7 original pages are CLASSES exposing .root(); the 2 new pages
         # (dlss, settings) are built by FACTORIES that return a Gtk.Widget
         # directly (no .root() hop), so stack registration splits on the name.
@@ -224,12 +224,14 @@ class MainWindow(Gtk.ApplicationWindow):
         sep = Gtk.Separator()
         main.append(sep)
         main.append(self._paned)
-        # Save toast: the canonical transient-confirmation surface, mounted LAST
-        # so it sits at the window bottom. A Gtk.Revealer collapses to zero
-        # height when hidden, so it reserves no space until a save/swap fires.
+        # Status bar: persistent bottom feedback line (last action / error / ipc path)
+        self.statusbar = StatusBar()
+        main.append(self.statusbar)
+        # Save toast: the canonical transient-confirmation surface, mounted AFTER
+        # the status bar so it slides UP from the window bottom. A Gtk.Revealer
+        # collapses to zero height when hidden, so it reserves no space until a
+        # save/swap fires. It respects the motion tier (instant on 'off').
         self.toast = SaveToast()
-        # Scope the toast's slide to the boot-time motion tier (the anim handler
-        # guards with getattr so its boot call before this line is safe).
         self.toast.set_instant(self._motion_off())
         main.append(self.toast)
         self.set_child(main)
@@ -286,6 +288,9 @@ class MainWindow(Gtk.ApplicationWindow):
         Views get a bound callback, never the toast object — so a view can't
         assume anything about the widget that happens to mount the message."""
         self.toast.show(message)
+        # Also update the persistent status bar for cross-page feedback
+        if hasattr(self, "statusbar"):
+            self.statusbar.push(message)
 
     # ---- keyboard accelerators ----------------------------------------------
     def _setup_accels(self, app) -> None:

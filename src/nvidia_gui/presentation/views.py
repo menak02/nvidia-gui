@@ -15,7 +15,7 @@ from typing import Callable, TYPE_CHECKING
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import GLib, Gtk  # noqa: E402
+from gi.repository import GLib, Gio, Gtk  # noqa: E402
 
 from ..domain.models import (
     DiagStatus,
@@ -268,6 +268,14 @@ class GamesView:
         self._scan_btn = scan
         hdr.append(t); hdr.append(scan)
         left.append(hdr)
+        # Search entry for filtering the games list
+        self._search_entry = Gtk.SearchEntry()
+        self._search_entry.set_placeholder_text("Filter games…")
+        self._search_entry.set_visible(False)  # hidden until first scan populates
+        self._search_entry.connect("notify::text", self._on_filter_changed)
+        left.append(self._search_entry)
+        # Store the full list for filtering
+        self._filter_model: Gtk.FilterListModel | None = None
         sw = Gtk.ScrolledWindow(); sw.set_vexpand(True); sw.set_child(self._listbox)
         left.append(sw)
         # right: detail
@@ -515,19 +523,47 @@ class GamesView:
             self._show_empty_state()
             return False
         self._games = games or []
-        # Stash each row's index on its child box: GTK4 dropped the
-        # `Gtk.ListBoxRow.get_index()` API that GTK3 had, so recovering the
-        # index from a selected row needs us to carry it ourselves.
-        for i, g in enumerate(self._games):
+        # Show search entry now that we have content
+        if self._search_entry is not None:
+            self._search_entry.set_visible(True)
+        # Populate the list; stash original index on each row for selection
+        self._populate_list(self._games)
+
+    def _on_filter_changed(self, _entry, _pspec) -> None:
+        """Filter the games list by name substring (case-insensitive)."""
+        if self._search_entry is None:
+            return
+        query = self._search_entry.get_text().strip().lower()
+        if not query:
+            self._populate_list(self._games)
+        else:
+            filtered = [g for g in self._games if query in g.name.lower()]
+            self._populate_list(filtered)
+
+    def _populate_list(self, items: list[Game]) -> None:
+        """Populate the listbox with *items* (subset or full list)."""
+        self._listbox.remove_all()
+        for g in items:
             row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
             row.set_margin_start(10); row.set_margin_end(10)
             row.set_margin_top(8); row.set_margin_bottom(8)
+            # top line: name + saved-profile badge (if any)
+            top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
             nm = Gtk.Label(label=g.name, xalign=0); nm.add_css_class("nvgui-row-label")
+            top_row.append(nm)
+            # saved-profile badge
+            if self.uc.has_profile(g.appid):
+                badge = pill("saved", on=True)
+                badge.set_halign(Gtk.Align.END)
+                top_row.append(badge)
+            row.append(top_row)
             meta = Gtk.Label(label=f"{g.appid} · {g.installdir}",
                              xalign=0)
             meta.add_css_class("nvgui-card-subtle")
-            row.append(nm); row.append(meta)
-            row._nvgui_index = i
+            row.append(meta)
+            # stash original index for selection lookup
+            idx = self._games.index(g)  # original index in full list
+            row._nvgui_index = idx
             self._listbox.append(row)
         # default selection — fires _on_select with row 0, building its editor
         if self._games:
@@ -1293,8 +1329,13 @@ class RtxView:
 #  Profiles (summary of saved per-game profiles)
 # ===========================================================================
 class ProfilesView:
-    def __init__(self, uc: "UseCases") -> None:
+    def __init__(self, uc: "UseCases",
+                 on_status: "Callable[[str], None] | None" = None) -> None:
         self.uc = uc
+        # The transient-confirmation surface (toast + status bar) so an
+        # export/import result reaches the user even off-page. Backward-
+        # compatible: None means no cross-page feedback (older call sites).
+        self._on_status = on_status
         self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self._build()
 
@@ -1336,6 +1377,80 @@ class ProfilesView:
             h.add_css_class("nvgui-muted"); h.set_wrap(True); h.set_xalign(0)
             b2.append(h)
         self._root.append(c2)
+
+        # ---- Backup & restore (export/import all profiles) -----------
+        c3, b3 = _card(
+            "Backup & restore",
+            "Export every saved per-game profile to a JSON file you can copy "
+            "between machines, or import a backup back — importing only applies "
+            "profiles for games present in this library.",
+        )
+        export_btn = Gtk.Button(label="Export…")
+        export_btn.add_css_class("nvgui-btn-primary")
+        export_btn.set_tooltip_text("Save all per-game profiles to a JSON file")
+        export_btn.connect("clicked", lambda b: self._on_export(b))
+        import_btn = Gtk.Button(label="Import…")
+        import_btn.add_css_class("nvgui-btn-ghost")
+        import_btn.set_tooltip_text("Load per-game profiles from a JSON backup")
+        import_btn.connect("clicked", lambda b: self._on_import(b))
+        br_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        br_row.append(export_btn)
+        br_row.append(import_btn)
+        b3.append(br_row)
+        self._root.append(c3)
+
+    def _on_export(self, btn: Gtk.Button) -> None:
+        """Open a Save dialog (Gtk.FileDialog, GTK 4.10+) and write the JSON."""
+        dlg = Gtk.FileDialog()
+        dlg.set_title("Export profiles")
+        dlg.set_initial_name("nvidia-gui-profiles.json")
+        flt = Gtk.FileFilter()
+        flt.set_name("JSON profile backups")
+        flt.add_pattern("*.json")
+        flts = Gio.ListStore.new(Gtk.FileFilter)
+        flts.append(flt)
+        dlg.set_filters(flts)
+        parent = toplevel_of(btn)
+
+        def _cb(_d, res) -> None:
+            try:
+                gfile = dlg.save_finish(res)
+            except Exception:  # noqa: BLE001 -- user cancelled or dismiss
+                return
+            ok, msg = self.uc.export_profiles(gfile.get_path())
+            self._push(msg)
+
+        dlg.save(parent, None, _cb, None)
+
+    def _on_import(self, btn: Gtk.Button) -> None:
+        """Open a file picker (Gtk.FileDialog) and load the JSON backup."""
+        dlg = Gtk.FileDialog()
+        dlg.set_title("Import profiles")
+        flt = Gtk.FileFilter()
+        flt.set_name("JSON profile backups")
+        flt.add_pattern("*.json")
+        flts = Gio.ListStore.new(Gtk.FileFilter)
+        flts.append(flt)
+        dlg.set_filters(flts)
+        parent = toplevel_of(btn)
+
+        def _cb(_d, res) -> None:
+            try:
+                gfile = dlg.open_finish(res)
+            except Exception:  # noqa: BLE001 -- user cancelled or dismiss
+                return
+            ok, msg = self.uc.import_profiles(gfile.get_path())
+            self._push(msg)
+
+        dlg.open(parent, None, _cb, None)
+
+    def _push(self, message: str) -> None:
+        """Surface an export/import result. Toast+statusbar if wired, else no-op."""
+        if self._on_status is not None:
+            try:
+                self._on_status(message)
+            except Exception:  # noqa: BLE001
+                pass
 
     def root(self) -> Gtk.Widget:
         return _scrolled(self._root)
