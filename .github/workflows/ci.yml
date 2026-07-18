@@ -61,7 +61,7 @@ jobs:
       # widgets WITHOUT present() (display-free construction), so no display is
       # needed here — but Xvfb is available regardless.
       - name: Run headless service tests
-        run: PYTHONPATH=src python3 tests/test_services.py
+        run: xvfb-run -a env PYTHONPATH=src python3 tests/test_services.py
 
       # ---- 2. 5-second smoke (must be timeout-killed, rc 124) -------------
       # The app is launched under Xvfb; `timeout -k 2 5` SIGTERMs it at 5s and
