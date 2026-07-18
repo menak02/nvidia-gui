@@ -39,8 +39,10 @@ def _atomic_write(target: pathlib.Path, text: str) -> None:
 # read→save cycle — a field-by-field schema migration with no version header.
 _FIELDS = (
     "appid", "expose_nvidia_gpu", "enable_nvapi", "enable_dxvk_nvapi",
-    "enable_rtx", "force_dxr", "dlss_preset", "enable_dlss_fg", "enable_reflex",
-    "enable_gamemode", "enable_mangohud", "dlss_dll_swap", "dlss_swap_version",
+    "enable_rtx", "force_dxr", "dlss_preset", "enable_dlss_fg",
+    "dlss_fg_preset", "dlss_fg_mode", "dlss_fg_multiplier",
+    "enable_reflex", "enable_gamemode", "enable_mangohud",
+    "dlss_dll_swap", "dlss_swap_version",
 )
 
 

@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 import pathlib
 
+from .adapters.color_wayland import WaylandColorAdapter
+from .adapters.color_xrandr import XrandrColorAdapter
 from .adapters.config_toml import get_config_manager
 from .adapters.diagnostics import SteamDiagnostics
 from .adapters.dlss_cache_fs import FsDlssCache
@@ -34,6 +36,13 @@ def _install_abs(games: SteamLibrary, game: Game) -> str | None:
     """Resolve a game's absolute install dir from the Steam library."""
     p = games.install_path(game.installdir)
     return str(p) if p else None
+
+
+def _resolve_color_adapter(settings):
+    import os
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return WaylandColorAdapter(settings)
+    return XrandrColorAdapter(settings)
 
 
 def _wire(cfg) -> UseCases:
@@ -67,6 +76,7 @@ def _wire(cfg) -> UseCases:
         ),
         settings=settings,
         vibrance=NvibrantVibrance(settings=settings),
+        color=_resolve_color_adapter(settings),
     )
 
 

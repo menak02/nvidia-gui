@@ -40,6 +40,7 @@ from .ports import (
     ProfileStorePort,
     SettingsPort,
     VibrancePort,
+    ColorPort,
 )
 
 
@@ -78,6 +79,7 @@ class UseCases:
         detection: FeatureDetectionPort | None = None,
         settings: SettingsPort | None = None,
         vibrance: VibrancePort | None = None,
+        color: ColorPort | None = None,
     ) -> None:
         self.gpu = gpu
         self.driver = driver
@@ -97,6 +99,8 @@ class UseCases:
         self.settings = settings
         # Optional: digital vibrance control via nvibrant.
         self.vibrance = vibrance
+        # Optional: digital brightness and contrast control.
+        self.color = color
 
     # ---- telemetry --------------------------------------------------------
     def snapshot(self) -> GpuSnapshot:
@@ -127,12 +131,51 @@ class UseCases:
             return False
         return self.vibrance.set_vibrance(values)
 
+    # ---- digital color (brightness/contrast) --------------------------------
+    def is_color_available(self) -> bool:
+        """True if the color (brightness/contrast) subsystem is available."""
+        if self.color is None:
+            return False
+        return self.color.is_available()
+
+    def detect_color_displays(self) -> list[dict[str, Any]]:
+        """Probe connected display outputs via the color port."""
+        if self.color is None:
+            return []
+        return self.color.detect_displays()
+
+    def set_color(self, connector_id: str, brightness: float, contrast: float) -> bool:
+        """Apply brightness and contrast levels to a physical display output."""
+        if self.color is None:
+            return False
+        return self.color.set_color(connector_id, brightness, contrast)
+
     # ---- games ------------------------------------------------------------
     def scan_games(self) -> list[Game]:
         return self.games.scan()
 
     def get_profile(self, appid: str) -> GameProfile:
-        return self.profiles.load(appid)
+        profile = self.profiles.load(appid)
+        # Parse current launch options in Steam and import user variables
+        raw = self.launch.get_raw_options(appid)
+        if raw:
+            words = raw.split()
+            for word in words:
+                if word == "%command%":
+                    break
+                if "=" in word and not word.startswith("-"):
+                    key, _, val = word.partition("=")
+                    if key == "VKD3D_CONFIG":
+                        # extract tokens that aren't dxr / dxr11
+                        user_tokens = [t.strip() for t in val.split(",") if t.strip() not in ("dxr", "dxr11")]
+                        if user_tokens:
+                            user_val = ",".join(user_tokens)
+                            if "VKD3D_CONFIG" not in profile.extra_env:
+                                profile.extra_env["VKD3D_CONFIG"] = user_val
+                    elif key not in ("PROTON_ENABLE_NVAPI", "PROTON_HIDE_NVIDIA_GPU", "DXVK_ENABLE_NVAPI"):
+                        if key.isidentifier() and key not in profile.extra_env:
+                            profile.extra_env[key] = val
+        return profile
 
     def save_profile(self, profile: GameProfile) -> SaveProfileResult:
         """Persist the TOML profile, render+write the env-file, and ensure the
@@ -392,6 +435,9 @@ class UseCases:
                     "force_dxr": p.force_dxr,
                     "dlss_preset": p.dlss_preset,
                     "enable_dlss_fg": p.enable_dlss_fg,
+                    "dlss_fg_preset": p.dlss_fg_preset,
+                    "dlss_fg_mode": p.dlss_fg_mode,
+                    "dlss_fg_multiplier": p.dlss_fg_multiplier,
                     "enable_reflex": p.enable_reflex,
                     "enable_gamemode": p.enable_gamemode,
                     "enable_mangohud": p.enable_mangohud,
@@ -443,6 +489,9 @@ class UseCases:
             profile.force_dxr = p.get("force_dxr", False)
             profile.dlss_preset = p.get("dlss_preset", DlssPreset.DISABLED)
             profile.enable_dlss_fg = p.get("enable_dlss_fg", False)
+            profile.dlss_fg_preset = p.get("dlss_fg_preset", "default")
+            profile.dlss_fg_mode = p.get("dlss_fg_mode", "default")
+            profile.dlss_fg_multiplier = int(p.get("dlss_fg_multiplier", 0))
             profile.enable_reflex = p.get("enable_reflex", False)
             profile.enable_gamemode = p.get("enable_gamemode", False)
             profile.enable_mangohud = p.get("enable_mangohud", False)

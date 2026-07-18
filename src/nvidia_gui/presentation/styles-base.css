@@ -226,6 +226,55 @@ combobox button.combo {
     border-radius: 2px;
 }
 
+/* =========================================================== Popovers & Dropdown Menus */
+popover {
+    background-color: #141414;
+    border: 1px solid #2e2e2e;
+    border-radius: 2px;
+}
+
+popover contents {
+    background-color: #141414;
+    padding: 6px;
+    border-radius: 2px;
+}
+
+popover listview {
+    background-color: #141414;
+}
+
+popover listview row {
+    padding: 8px 12px;
+    border-radius: 2px;
+    color: #c8c8c8;
+    background-color: transparent;
+}
+
+popover listview row:hover {
+    background-color: #222222;
+    color: #ffffff;
+}
+
+popover listview row:selected {
+    background-color: #2c3a12;
+    color: #ffffff;
+}
+
+menu {
+    background-color: #141414;
+    border: 1px solid #2e2e2e;
+}
+
+menuitem {
+    padding: 8px 12px;
+    color: #c8c8c8;
+}
+
+menuitem:hover {
+    background-color: #222222;
+    color: #ffffff;
+}
+
 /* =========================================================== Misc */
 separator {
     background: #1f1f1f;
@@ -365,4 +414,54 @@ button:active:focus-visible,
 .nvgui-status-label {
     color: #9a9a9a;
     font-size: 0.82rem;
+}
+
+/* =========================================================== Sliders (GtkScale) */
+scale {
+    min-height: 24px;
+}
+
+scale trough {
+    background-color: #1e1e1e;
+    border: 1px solid #2e2e2e;
+    border-radius: 2px;
+    min-height: 6px;
+}
+
+scale highlight {
+    background-color: #76b900;
+    border-radius: 2px;
+}
+
+scale slider {
+    background-color: #76b900;
+    border: 1px solid #84d10a;
+    border-radius: 2px; /* Angular 2px radius typical of NVIDIA style */
+    min-width: 14px;
+    min-height: 14px;
+    margin: -5px 0;
+}
+
+scale slider:hover {
+    background-color: #84d10a;
+    border-color: #9ad815;
+}
+
+scale slider:active {
+    background-color: #ffffff;
+    border-color: #ffffff;
+}
+
+scale:disabled trough {
+    background-color: #121212;
+    border-color: #1e1e1e;
+}
+
+scale:disabled highlight {
+    background-color: #4a4a4a;
+}
+
+scale:disabled slider {
+    background-color: #4a4a4a;
+    border-color: #5a5a5a;
 }

@@ -111,6 +111,14 @@ def build_game_env(profile: GameProfile) -> dict[str, str]:
     if profile.dlss_preset and profile.dlss_preset != DlssPreset.DISABLED:
         env[_SR_PRESET_VAR] = profile.dlss_preset
 
+    # DLSS FG presets, modes, and multipliers
+    if profile.dlss_fg_preset and profile.dlss_fg_preset != "default":
+        env["DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION"] = profile.dlss_fg_preset
+    if profile.dlss_fg_mode and profile.dlss_fg_mode != "default":
+        env["DXVK_NVAPI_DRS_NGX_DLSSG_MODE"] = profile.dlss_fg_mode
+    if profile.dlss_fg_multiplier != 0:
+        env["DXVK_NVAPI_DRS_NGX_DLSSG_MULTI_FRAME_COUNT"] = str(profile.dlss_fg_multiplier)
+
     # free-form last so the user can force-override anything curated. VKD3D_CONFIG
     # is merged rather than overwritten so the force_dxr `dxr` token is additive.
     for k, v in profile.extra_env.items():

@@ -63,9 +63,8 @@ class EnvDisplayInfo(DisplayInfoPort):
         desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
         vrr = _vrr_capable()
         note = (
-            "Display state is read-only on Linux. Mode/gamma/vibrance tuning that "
-            "the Windows NVIDIA App applies to a fullscreen exclusive surface has "
-            "no equivalent userspace path on Wayland."
+            "Digital vibrance and color (brightness & contrast) controls are now active. "
+            "Native hardware mode setting remains read-only on Wayland."
         )
         return DisplayInfo(
             server=server,

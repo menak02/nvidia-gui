@@ -51,24 +51,42 @@ class DlssPreset:
     ``NVAPI_DLSS_SR_PRESET_OVERRIDE``.
     """
 
-    # DLSS 4 (-letter presets, the modern defaults).
-    LETTER_K = "k"   # balanced, latest anti-ghost passthrough
-    LETTER_N = "n"   # newest dlss-ultra-quality-ish heuristics
-    # Legacy numeric presets (DLSS 2 era) — still honored by older DLLs.
-    LEGACY_A = "a"
-    LEGACY_F = "f"
+    LETTER_A = "a"
+    LETTER_B = "b"
+    LETTER_C = "c"
+    LETTER_D = "d"
+    LETTER_E = "e"
+    LETTER_F = "f"
+    LETTER_G = "g"
+    LETTER_I = "i"
+    LETTER_J = "j"
+    LETTER_K = "k"
+    LETTER_L = "l"
+    LETTER_M = "m"
+    LETTER_N = "n"
+    LETTER_O = "o"
+    LETTER_P = "p"
 
     DISABLED = "off"
 
-    # curated choices offered in the UI. (letter presets beyond k/n map to
-    # NVAPI codes n..p in newer SDKs; we expose the two most-stable ones plus
-    # the legacy anchor.)
+    # All DLSS letter presets (A through P).
     CHOICES: tuple[tuple[str, str], ...] = (
         (DISABLED, "Disabled (use game default)"),
+        (LETTER_A, "Preset A"),
+        (LETTER_B, "Preset B"),
+        (LETTER_C, "Preset C"),
+        (LETTER_D, "Preset D"),
+        (LETTER_E, "Preset E"),
+        (LETTER_F, "Preset F"),
+        (LETTER_G, "Preset G"),
+        (LETTER_I, "Preset I"),
+        (LETTER_J, "Preset J"),
         (LETTER_K, "Preset K (recommended, DLSS 4)"),
+        (LETTER_L, "Preset L"),
+        (LETTER_M, "Preset M"),
         (LETTER_N, "Preset N (DLSS 4 — latest)"),
-        (LEGACY_A, "Preset A (DLSS 2)"),
-        (LEGACY_F, "Preset F (DLSS 2)"),
+        (LETTER_O, "Preset O"),
+        (LETTER_P, "Preset P"),
     )
 
 
@@ -121,6 +139,9 @@ class GameProfile:
     # DLSS
     dlss_preset: str = DlssPreset.DISABLED
     enable_dlss_fg: bool = False      # -> DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE=on  (frame generation)
+    dlss_fg_preset: str = "default"   # -> DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION
+    dlss_fg_mode: str = "default"     # -> DXVK_NVAPI_DRS_NGX_DLSSG_MODE
+    dlss_fg_multiplier: int = 0       # -> DXVK_NVAPI_DRS_NGX_DLSSG_MULTI_FRAME_COUNT
     # Latency & scheduling
     enable_reflex: bool = False        # -> DXVK_NVAPI_VKREFLEX=1   (Vulkan Reflex layer)
     enable_gamemode: bool = False      # -> GAMEMODERUN=1

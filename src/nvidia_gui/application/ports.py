@@ -103,6 +103,11 @@ class LaunchOptionPort(ABC):
     def remove_wrapper(self, appid: str) -> bool:
         ...
 
+    @abstractmethod
+    def get_raw_options(self, appid: str) -> str:
+        """Return the current LaunchOptions string for the given appid."""
+        ...
+
 
 # ---------------------------------------------------------------------------
 #  DLSS cache + swap
@@ -292,6 +297,42 @@ class VibrancePort(ABC):
         """Apply vibrance values for all physical display outputs.
 
         The list length must match the number of connectors reported.
+        Returns True on success, False on failure.
+        """
+        ...
+
+
+# ---------------------------------------------------------------------------
+#  Digital Brightness and Contrast
+# ---------------------------------------------------------------------------
+class ColorPort(ABC):
+    """Query and apply display brightness and contrast.
+    
+    Values range from 0.0 to 2.0 (with 1.0 being the hardware default).
+    """
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """True if the backend tool (xrandr, wl-gammarelay-rs) is available."""
+        ...
+
+    @abstractmethod
+    def detect_displays(self) -> list[dict[str, Any]]:
+        """Run tool to probe display outputs.
+
+        Returns a list of dictionaries, one for each connector:
+        {
+            "connector_id": str,
+            "type": str,       # e.g., "HDMI-A-1", "DP-1"
+            "connected": bool,
+        }
+        """
+        ...
+
+    @abstractmethod
+    def set_color(self, connector_id: str, brightness: float, contrast: float) -> bool:
+        """Apply brightness and contrast values for a specific display output.
+
         Returns True on success, False on failure.
         """
         ...

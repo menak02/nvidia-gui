@@ -109,6 +109,35 @@ class SteamLaunchOptions(LaunchOptionPort):
         existing = "" if existing is None else str(existing)
         # strip any prior managed prefix (idempotent refresh of the path)
         user_part = _SOURCE_PREFIX.sub("", existing).strip()
+        
+        # Clean curated variables from user part to prevent command line overrides
+        words = user_part.split()
+        cleaned_words = []
+        found_cmd = False
+        curated_keys = {
+            "VKD3D_CONFIG", "PROTON_ENABLE_NVAPI", "PROTON_HIDE_NVIDIA_GPU", "DXVK_ENABLE_NVAPI",
+            "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE",
+            "DXVK_NVAPI_DRS_NGX_DLSS_SR_OVERRIDE_RENDER_PRESET_SELECTION",
+            "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION",
+            "DXVK_NVAPI_DRS_NGX_DLSSG_MODE",
+            "DXVK_NVAPI_DRS_NGX_DLSSG_MULTI_FRAME_COUNT"
+        }
+        for word in words:
+            if not found_cmd:
+                if word == "%command%":
+                    found_cmd = True
+                    cleaned_words.append(word)
+                elif "=" in word and not word.startswith("-"):
+                    key, _, val = word.partition("=")
+                    if key in curated_keys:
+                        continue
+                    cleaned_words.append(word)
+                else:
+                    cleaned_words.append(word)
+            else:
+                cleaned_words.append(word)
+        user_part = " ".join(cleaned_words)
+
         owned = _build_owned(env_file_abs)
         new_val = (owned + (" " + user_part if user_part else "")).strip()
         cfg["LaunchOptions"] = new_val
@@ -137,6 +166,20 @@ class SteamLaunchOptions(LaunchOptionPort):
                 apps.pop(str(appid), None)
         self._atomic_write_vdf(path, data)
         return True
+
+    def get_raw_options(self, appid: str) -> str:
+        found = self._find_localconfig()
+        if not found:
+            return ""
+        _uid, path = found
+        data = self._read_vdf(path)
+        if data is None:
+            return ""
+        apps = self._apps(data)
+        cfg = apps.get(str(appid))
+        if not isinstance(cfg, dict):
+            return ""
+        return str(cfg.get("LaunchOptions", ""))
 
     @staticmethod
     def _apps(data: dict) -> dict:

@@ -129,6 +129,32 @@ def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
 _PRESET_VALUES: list[str] = [value for value, _label in DlssPreset.CHOICES]
 _PRESET_LABELS: list[str] = [label for _value, label in DlssPreset.CHOICES]
 
+_FG_PRESET_VALUES: list[str] = ["default", "a", "b", "latest"]
+_FG_PRESET_LABELS: list[str] = [
+    "Default (use game default)",
+    "Preset A (standard)",
+    "Preset B (improved UI/HUD - DLSS 4.5)",
+    "Preset Latest (force latest)",
+]
+
+_FG_MODE_VALUES: list[str] = ["default", "auto", "dynamic", "fixed"]
+_FG_MODE_LABELS: list[str] = [
+    "Default (use game default)",
+    "Auto (driver auto-selection)",
+    "Dynamic (auto multiplier matching display hz)",
+    "Fixed (fixed multiplier override)",
+]
+
+_FG_MULTIPLIER_VALUES: list[int] = [0, 1, 2, 3, 4, 5]
+_FG_MULTIPLIER_LABELS: list[str] = [
+    "Application Controlled / Off",
+    "2x (generate 1 frame per render frame)",
+    "3x",
+    "4x",
+    "5x",
+    "6x (RTX 50 Series maximum)",
+]
+
 
 def _clear(box: Gtk.Box) -> None:
     """Remove all children of a box (the clear-then-rebuild idiom)."""
@@ -675,10 +701,60 @@ class GamesView:
         # DLSS-SR is game-specific: gate the preset dropdown by the dlss_sr
         # capability (only the dropdown — FG below has its own dlss_fg gate).
         self._gate(game, "dlss_sr", [self._ed["preset"]], b)
-        b.append(toggle("fg", "DLSS-G Frame Generation",
-                        "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE=on", p.enable_dlss_fg))
+        fg_row = toggle("fg", "DLSS-G Frame Generation",
+                        "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE=on", p.enable_dlss_fg)
+        b.append(fg_row)
+
+        fg_preset_lbl = Gtk.Label(label="DLSS-G Preset · "
+                                        "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION")
+        fg_preset_lbl.add_css_class("nvgui-card-subtle"); fg_preset_lbl.set_xalign(0); fg_preset_lbl.set_wrap(True)
+        b.append(fg_preset_lbl)
+        fg_preset_dd = Gtk.DropDown.new_from_strings(_FG_PRESET_LABELS)
+        try:
+            fg_preset_dd.set_selected(_FG_PRESET_VALUES.index(p.dlss_fg_preset or "default"))
+        except ValueError:
+            fg_preset_dd.set_selected(0)
+        self._ed["fg_preset"] = fg_preset_dd
+        b.append(fg_preset_dd)
+
+        fg_mode_lbl = Gtk.Label(label="DLSS-G Mode · DXVK_NVAPI_DRS_NGX_DLSSG_MODE")
+        fg_mode_lbl.add_css_class("nvgui-card-subtle"); fg_mode_lbl.set_xalign(0); fg_mode_lbl.set_wrap(True)
+        b.append(fg_mode_lbl)
+        fg_mode_dd = Gtk.DropDown.new_from_strings(_FG_MODE_LABELS)
+        try:
+            fg_mode_dd.set_selected(_FG_MODE_VALUES.index(p.dlss_fg_mode or "default"))
+        except ValueError:
+            fg_mode_dd.set_selected(0)
+        self._ed["fg_mode"] = fg_mode_dd
+        b.append(fg_mode_dd)
+
+        fg_multi_lbl = Gtk.Label(label="DLSS-G Multiplier · DXVK_NVAPI_DRS_NGX_DLSSG_MULTI_FRAME_COUNT")
+        fg_multi_lbl.add_css_class("nvgui-card-subtle"); fg_multi_lbl.set_xalign(0); fg_multi_lbl.set_wrap(True)
+        b.append(fg_multi_lbl)
+        fg_multi_dd = Gtk.DropDown.new_from_strings(_FG_MULTIPLIER_LABELS)
+        try:
+            fg_multi_dd.set_selected(_FG_MULTIPLIER_VALUES.index(p.dlss_fg_multiplier or 0))
+        except ValueError:
+            fg_multi_dd.set_selected(0)
+        self._ed["fg_multiplier"] = fg_multi_dd
+        b.append(fg_multi_dd)
+
+        def _update_fg_sub_sensitivity(active):
+            fg_preset_dd.set_sensitive(active)
+            fg_mode_dd.set_sensitive(active)
+            fg_multi_dd.set_sensitive(active)
+            fg_preset_lbl.set_sensitive(active)
+            fg_mode_lbl.set_sensitive(active)
+            fg_multi_lbl.set_sensitive(active)
+
+        _update_fg_sub_sensitivity(p.enable_dlss_fg)
+        fg_row.connect("toggled", lambda _row, active: _update_fg_sub_sensitivity(active))
+
         # Frame Generation is game-specific: gate by the dlss_fg capability.
-        self._gate(game, "dlss_fg", [self._ed["fg"]], b)
+        self._gate(game, "dlss_fg", [
+            self._ed["fg"], fg_preset_dd, fg_mode_dd, fg_multi_dd,
+            fg_preset_lbl, fg_mode_lbl, fg_multi_lbl
+        ], b)
         self._detail.append(c)
 
         # ---- Latency & scheduling ----
@@ -983,6 +1059,15 @@ class GamesView:
         p.dlss_preset = (_PRESET_VALUES[idx]
                          if 0 <= idx < len(_PRESET_VALUES) else DlssPreset.DISABLED)
         p.enable_dlss_fg = self._ed["fg"].active
+        idx_fgp = self._ed["fg_preset"].get_selected()
+        p.dlss_fg_preset = (_FG_PRESET_VALUES[idx_fgp]
+                            if 0 <= idx_fgp < len(_FG_PRESET_VALUES) else "default")
+        idx_fgm = self._ed["fg_mode"].get_selected()
+        p.dlss_fg_mode = (_FG_MODE_VALUES[idx_fgm]
+                          if 0 <= idx_fgm < len(_FG_MODE_VALUES) else "default")
+        idx_fgmult = self._ed["fg_multiplier"].get_selected()
+        p.dlss_fg_multiplier = (_FG_MULTIPLIER_VALUES[idx_fgmult]
+                                if 0 <= idx_fgmult < len(_FG_MULTIPLIER_VALUES) else 0)
         # Latency & scheduling
         p.enable_reflex = self._ed["reflex"].active
         p.enable_gamemode = self._ed["gamemode"].active
@@ -1171,11 +1256,13 @@ class GraphicsView:
 
 
 # ===========================================================================
-#  Display (read-only)
+#  Display (read-write)
 # ===========================================================================
 class DisplayView:
     def __init__(self, uc: "UseCases") -> None:
         self.uc = uc
+        self._vibrance_deb = Debouncer(200)
+        self._color_deb = Debouncer(500)
         self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self._build()
 
@@ -1185,72 +1272,13 @@ class DisplayView:
 
         info = self.uc.display_info()
         c, b = _card("Display server",
-                     "Read-only. Mode/gamma/vibrance tuning that the Windows NVIDIA App "
-                     "applies has no equivalent userspace path on Wayland.")
+                     "Configure physical display topology and digital color enhancements.")
         b.append(TextRow("Server", info.server))
         b.append(TextRow("Monitors", ", ".join(info.monitors) or "—"))
         b.append(TextRow("VRR / GSYNC capable", "Yes" if info.vrr_capable else "No",
-                         accent=info.vrr_capable))
+                          accent=info.vrr_capable))
         b.append(TextRow("Notes", info.notes))
         self._root.append(c)
-
-    def root(self) -> Gtk.Widget:
-        return _scrolled(self._root)
-
-
-# ===========================================================================
-#  Drivers (read-only + link to Graphics)
-# ===========================================================================
-class DriversView:
-    def __init__(self, uc: "UseCases",
-                 on_navigate: Callable[[str], None] | None = None) -> None:
-        self.uc = uc
-        # OUT-of-rail navigation seam: the "Open DLSS page" button deep-links here
-        # rather than re-rendering the canonical cached-version list a third time.
-        # ``window.py`` passes ``self.sidebar.switch_to`` so the flip + the active-
-        # rail highlight stay in lockstep with the sidebar either way.
-        self._on_navigate = on_navigate
-        self._vibrance_deb = Debouncer(200)
-        self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        self._build()
-
-    def _build(self) -> None:
-        title = Gtk.Label(label="Drivers"); title.add_css_class("nvgui-nav-title")
-        title.set_xalign(0); self._root.append(title)
-        info = self.uc.driver_info()
-        snap = self.uc.snapshot()
-        c, b = _card("Driver & module")
-        b.append(TextRow("Driver version", info.driver_version or snap.driver_version or "—"))
-        b.append(TextRow("Module", info.module_name))
-        b.append(TextRow("Module version", info.module_version or "—"))
-        b.append(TextRow("Branch", info.branch or "—",
-                          accent=(info.branch == "open")))
-        b.append(TextRow("GPU", snap.gpu_name or "—"))
-        b.append(TextRow("nvidia-settings writes",
-                          "Inert (NV-CONTROL needs X)" if info.compositor_incompatible
-                          else "available"))
-        b.append(TextRow("modprobe.d config", info.modprobe_config_path or "—"))
-        self._root.append(c)
-
-        # DLSS cache glance — a SINGLE read-only count + a deep-link button, not
-        # the full re-render of the version list. The canonical cached-version
-        # surface lives on the DLSS page (single home); the Drivers page only
-        # shows which swaps are seeded at a glance + hops you there to manage.
-        c2, b2 = _card("DLSS cache")
-        versions = self.uc.list_dlss_versions()
-        if versions:
-            b2.append(TextRow("Cached versions", str(len(versions))))
-        else:
-            hint = Gtk.Label(label="No versions cached yet.", xalign=0)
-            hint.add_css_class("nvgui-muted")
-            b2.append(hint)
-        openb = Gtk.Button(label="Open DLSS page")
-        openb.add_css_class("nvgui-btn-ghost")
-        openb.set_tooltip_text("Go to the DLSS page to download / swap / seed versions")
-        openb.set_halign(Gtk.Align.START)
-        openb.connect("clicked", self._on_open_dlss)
-        b2.append(openb)
-        self._root.append(c2)
 
         # Digital Vibrance Section
         if self.uc.is_vibrance_available():
@@ -1307,6 +1335,145 @@ class DriversView:
                     vb.append(hint)
 
                 self._root.append(vc)
+
+        # Digital Color Section (Brightness and Contrast)
+        if self.uc.is_color_available():
+            displays = self.uc.detect_color_displays()
+            if displays:
+                cc, cb = _card(
+                    "Digital Color (Brightness & Contrast)",
+                    "Configure digital brightness and contrast per output. "
+                    "Range: 0.1 to 3.0 (1.0 is default hardware level). "
+                    "(Note: On Hyprland, sliding these triggers a compositor screen-shader reload "
+                    "which causes a brief window flicker. Updates are debounced to minimize this)."
+                )
+
+                has_connected_color = False
+                for d in displays:
+                    if not d["connected"]:
+                        continue
+                    has_connected_color = True
+
+                    # Container for this display
+                    disp_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+                    disp_box.set_margin_top(4)
+                    disp_box.set_margin_bottom(8)
+
+                    label_text = f"{d['type']}"
+                    label = Gtk.Label(label=label_text, xalign=0)
+                    label.add_css_class("nvgui-row-label")
+                    disp_box.append(label)
+
+                    # Controls Box
+                    controls = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+                    controls.set_margin_start(16)
+                    
+                    conn_id = d["connector_id"]
+                    saved_b = self.uc.setting(f"color.{conn_id}.brightness", 1.0)
+                    saved_c = self.uc.setting(f"color.{conn_id}.contrast", 1.0)
+
+                    # Brightness
+                    b_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+                    b_label = Gtk.Label(label="Brightness", xalign=0)
+                    b_label.set_hexpand(True)
+                    b_row.append(b_label)
+                    
+                    b_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.1, 3.0, 0.05)
+                    b_scale.set_value(saved_b)
+                    b_scale.set_size_request(200, -1)
+                    b_scale.set_draw_value(True)
+                    b_scale.set_value_pos(Gtk.PositionType.RIGHT)
+                    b_row.append(b_scale)
+
+                    # Contrast
+                    c_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+                    c_label = Gtk.Label(label="Contrast", xalign=0)
+                    c_label.set_hexpand(True)
+                    c_row.append(c_label)
+                    
+                    c_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.1, 3.0, 0.05)
+                    c_scale.set_value(saved_c)
+                    c_scale.set_size_request(200, -1)
+                    c_scale.set_draw_value(True)
+                    c_scale.set_value_pos(Gtk.PositionType.RIGHT)
+                    c_row.append(c_scale)
+
+                    def _on_color_changed(s, cid=conn_id, bs=b_scale, cs=c_scale):
+                        b_val = float(bs.get_value())
+                        c_val = float(cs.get_value())
+                        self._color_deb.schedule(lambda: self.uc.set_color(cid, b_val, c_val))
+
+                    b_scale.connect("value-changed", _on_color_changed)
+                    c_scale.connect("value-changed", _on_color_changed)
+
+                    controls.append(b_row)
+                    controls.append(c_row)
+                    disp_box.append(controls)
+                    cb.append(disp_box)
+
+                if not has_connected_color:
+                    hint = Gtk.Label(label="No active displays available for color adjustment.", xalign=0)
+                    hint.add_css_class("nvgui-muted")
+                    cb.append(hint)
+
+                self._root.append(cc)
+
+    def root(self) -> Gtk.Widget:
+        return _scrolled(self._root)
+
+
+# ===========================================================================
+#  Drivers (read-only + link to Graphics)
+# ===========================================================================
+class DriversView:
+    def __init__(self, uc: "UseCases",
+                 on_navigate: Callable[[str], None] | None = None) -> None:
+        self.uc = uc
+        # OUT-of-rail navigation seam: the "Open DLSS page" button deep-links here
+        # rather than re-rendering the canonical cached-version list a third time.
+        # ``window.py`` passes ``self.sidebar.switch_to`` so the flip + the active-
+        # rail highlight stay in lockstep with the sidebar either way.
+        self._on_navigate = on_navigate
+        self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        self._build()
+
+    def _build(self) -> None:
+        title = Gtk.Label(label="Drivers"); title.add_css_class("nvgui-nav-title")
+        title.set_xalign(0); self._root.append(title)
+        info = self.uc.driver_info()
+        snap = self.uc.snapshot()
+        c, b = _card("Driver & module")
+        b.append(TextRow("Driver version", info.driver_version or snap.driver_version or "—"))
+        b.append(TextRow("Module", info.module_name))
+        b.append(TextRow("Module version", info.module_version or "—"))
+        b.append(TextRow("Branch", info.branch or "—",
+                          accent=(info.branch == "open")))
+        b.append(TextRow("GPU", snap.gpu_name or "—"))
+        b.append(TextRow("nvidia-settings writes",
+                          "Inert (NV-CONTROL needs X)" if info.compositor_incompatible
+                          else "available"))
+        b.append(TextRow("modprobe.d config", info.modprobe_config_path or "—"))
+        self._root.append(c)
+
+        # DLSS cache glance — a SINGLE read-only count + a deep-link button, not
+        # the full re-render of the version list. The canonical cached-version
+        # surface lives on the DLSS page (single home); the Drivers page only
+        # shows which swaps are seeded at a glance + hops you there to manage.
+        c2, b2 = _card("DLSS cache")
+        versions = self.uc.list_dlss_versions()
+        if versions:
+            b2.append(TextRow("Cached versions", str(len(versions))))
+        else:
+            hint = Gtk.Label(label="No versions cached yet.", xalign=0)
+            hint.add_css_class("nvgui-muted")
+            b2.append(hint)
+        openb = Gtk.Button(label="Open DLSS page")
+        openb.add_css_class("nvgui-btn-ghost")
+        openb.set_tooltip_text("Go to the DLSS page to download / swap / seed versions")
+        openb.set_halign(Gtk.Align.START)
+        openb.connect("clicked", self._on_open_dlss)
+        b2.append(openb)
+        self._root.append(c2)
 
     def _on_open_dlss(self, _b) -> None:
         """Deep-link to the DLSS page via the out-of-rail nav seam. Guarded
@@ -1365,18 +1532,25 @@ class RtxView:
         self._root.append(c)
 
         c2, b2 = _card("Honest feature parity",
-                       "These Windows-App RTX features have no Linux userspace equivalent "
-                       "and are intentionally not offered:")
-        for feat, note in [
-            ("Freestyle / Game Filter", "inline shader LUT — no Linux hook; greyed honestly."),
-            ("Smooth Motion", "frame interpolation driver-side; no Linux API."),
-            ("G-Assist / NVIDIA AI", "cloud assistant; not local on Linux."),
-            ("RTX HDR", "inline HDR tonemap; no Linux API."),
-        ]:
+                       "These Windows-App RTX features have no native driver-level Linux GUI equivalents, "
+                       "but equivalent workarounds and layers are available:")
+        
+        features_data = [
+            ("Freestyle / Game Filter", "via ReShade / vkBasalt", True, 
+             "Use vkBasalt Vulkan layer or Wine DLL overrides to run ReShade shaders (e.g. CAS, LUT, FXAA) directly in games."),
+            ("Smooth Motion", "via NVPRESENT (RTX 40/50)", True, 
+             "Set NVPRESENT_ENABLE_SMOOTH_MOTION=1 on driver version 575+ to interpolate Vulkan frames natively."),
+            ("G-Assist / NVIDIA AI", "not available", False, 
+             "Windows-exclusive cloud assistant; no Linux client or equivalent."),
+            ("RTX HDR", "via Gamescope ITM", True, 
+             "Launch via Gamescope with --hdr-enabled --hdr-itm-enable to dynamically upconvert SDR games to HDR."),
+        ]
+        
+        for feat, pill_text, is_on, note in features_data:
             row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             n = Gtk.Label(label=feat); n.add_css_class("nvgui-row-label"); n.set_hexpand(True)
             row.append(n)
-            row.append(pill("not available", on=False))
+            row.append(pill(pill_text, on=is_on))
             b2.append(row)
             desc = Gtk.Label(label=note, xalign=0, wrap=True)
             desc.add_css_class("nvgui-card-subtle"); b2.append(desc)

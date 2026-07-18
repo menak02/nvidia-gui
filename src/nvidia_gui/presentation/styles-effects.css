@@ -31,6 +31,10 @@ window.nvgui-motion-full switch slider {
     transition: background-color 150ms ease;
 }
 
+window.nvgui-motion-full scale slider {
+    transition: background-color 150ms ease, border-color 150ms ease;
+}
+
 /* Navbar hover-glow: smooth the background/border/colour shift on hover and on
  * the active rail highlight. NO box-shadow / blur -- the existing solid colours
  * easing in IS the glow. */
@@ -84,6 +88,7 @@ window.nvgui-motion-full .nvgui-status-dot {
 window.nvgui-motion-minimal button,
 window.nvgui-motion-minimal switch,
 window.nvgui-motion-minimal switch slider,
+window.nvgui-motion-minimal scale slider,
 window.nvgui-motion-minimal .nvgui-nav-btn {
     transition: background-color 50ms ease, border-color 50ms ease, color 50ms ease;
 }
