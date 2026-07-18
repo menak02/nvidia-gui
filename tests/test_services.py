@@ -1281,6 +1281,37 @@ def test_install_dir_probe_bounded_walk_finds_dlss_at_exotic_path() -> None:
     assert cap.dlss_sr.source == FeatureSource.INSTALLDIR, cap.dlss_sr.source
 
 
+# ---- umbrella 4e: Reflex self-detects from nvngx_dlssg.dll presence --------
+# Before this fix, reflex was hardcoded False,False for the DLL-probe booleans
+# so Reflex could NEVER self-detect from a DLL. nvngx_dlssg.dll (DLSS Frame Gen)
+# is a valid Reflex tell -- FG ships with Reflex. nvapi64.dll is NOT (universal
+# Proton NVAPI injection, present in every prefix including non-Reflex games).
+def test_reflex_self_detects_from_dlssg_dll_in_install_dir() -> None:
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    tmp = Path(tempfile.mkdtemp())
+    install = tmp / "common" / "FictionalReflexGame"
+    win64 = install / "Binaries" / "Win64"
+    win64.mkdir(parents=True)
+    (win64 / "nvngx_dlssg.dll").write_bytes(b"PE\x00\x00")
+    real_db = (Path(__file__).resolve().parent.parent / "src" / "nvidia_gui"
+               / "assets" / "nvidia_features.toml")
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda g: str(install) if g.appid == "6666666" else None,
+            steam_root=str(tmp / "steam"),
+            settings=None,
+            bundled_db=real_db,
+        )
+        g = Game(appid="6666666", name="Fictional Reflex Game",
+                 installdir="FictionalReflexGame")
+        cap = det.probe(g)
+    assert cap.reflex.supported is True, "reflex must self-detect from dlssg DLL"
+    assert cap.reflex.source == FeatureSource.INSTALLDIR, cap.reflex.source
+    assert cap.is_known() is True
+
+
 # ---- umbrella 5: ACF PARSER breadth across the game_corpus fixtures -------
 def test_acf_parser_breadth_multi_library_and_broken_manifest() -> None:
     import shutil

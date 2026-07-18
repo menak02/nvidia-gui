@@ -141,7 +141,7 @@ class SteamFeatureDetector(FeatureDetectionPort):
         reflex = self._singleton(ov.get("reflex"),
                                  online_flags.get("reflex"),
                                  bundled_flags.get("reflex"),
-                                 False, False)
+                                 dlssg_install, dlssg_prefix)
 
         # dlss_fg / rt: OR-style merges per the spec's special rules.
         dlss_fg = self._merge_fg(

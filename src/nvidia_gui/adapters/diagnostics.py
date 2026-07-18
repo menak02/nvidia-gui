@@ -33,7 +33,7 @@ _RT_EXTENSIONS = (
     "VK_KHR_ray_query",
 )
 # DLLs a Proton prefix should contain when NVAPI/DLSS is wired up.
-_NVAPI_DLLS = ("nvapi64.dll", "nvapi.dll", "nvngx_dlss.dll", "nvngx_dlssg.dll")
+_NVAPI_DLLS = ("nvapi64.dll", "nvapi.dll", "nvngx_dlss.dll", "nvngx_dlssg.dll", "NvLowLatencyVk.dll")
 _ICD_DIRS = (
     "/usr/share/vulkan/icd.d",
     "/etc/vulkan/icd.d",
