@@ -39,6 +39,7 @@ from .ports import (
     LaunchOptionPort,
     ProfileStorePort,
     SettingsPort,
+    VibrancePort,
 )
 
 
@@ -76,6 +77,7 @@ class UseCases:
         diagnostics: DiagnosticsPort,
         detection: FeatureDetectionPort | None = None,
         settings: SettingsPort | None = None,
+        vibrance: VibrancePort | None = None,
     ) -> None:
         self.gpu = gpu
         self.driver = driver
@@ -93,6 +95,8 @@ class UseCases:
         # Optional: presentation prefs (window/pane geometry). Defaulted so a
         # test constructing UseCases with the 10 functional ports still works.
         self.settings = settings
+        # Optional: digital vibrance control via nvibrant.
+        self.vibrance = vibrance
 
     # ---- telemetry --------------------------------------------------------
     def snapshot(self) -> GpuSnapshot:
@@ -103,6 +107,25 @@ class UseCases:
 
     def display_info(self) -> DisplayInfo:
         return self.display.read()
+
+    # ---- digital vibrance ---------------------------------------------------
+    def is_vibrance_available(self) -> bool:
+        """True if the digital vibrance subsystem is available on PATH."""
+        if self.vibrance is None:
+            return False
+        return self.vibrance.is_available()
+
+    def detect_vibrance_displays(self) -> list[dict[str, Any]]:
+        """Probe connected display outputs via nvibrant."""
+        if self.vibrance is None:
+            return []
+        return self.vibrance.detect_displays()
+
+    def set_vibrance(self, values: list[int]) -> bool:
+        """Apply vibrance levels across physical display outputs."""
+        if self.vibrance is None:
+            return False
+        return self.vibrance.set_vibrance(values)
 
     # ---- games ------------------------------------------------------------
     def scan_games(self) -> list[Game]:

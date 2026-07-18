@@ -142,6 +142,9 @@ class ConfigManager(SettingsPort):
             "dlss": {"default_swap_version": "", "auto_update": False,
                      "streamline_repo": "NVIDIA-RTX/Streamline"},
             "nvapi": {"enabled_default": True},
+            "feature_detection": {
+                "online_enabled": True,
+            },
             # Persisted window/pane geometry so a draggable Gtk.Paned divider and
             # the window size survive across launches (and a tiling WM that
             # overrides default-size at runtime doesn't fight a stale floor).

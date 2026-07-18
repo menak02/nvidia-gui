@@ -49,6 +49,7 @@ from nvidia_gui.adapters.gpu_query_sm import NvidiaSmiGpu  # noqa: E402
 from nvidia_gui.adapters.kernel_param_modprobe import _render, ModprobeKernelParam  # noqa: E402
 from nvidia_gui.adapters.launch_option_steam import SteamLaunchOptions  # noqa: E402
 from nvidia_gui.adapters.profile_store_fs import FsProfileStore  # noqa: E402
+from nvidia_gui.adapters.vibrance_nvibrant import NvibrantVibrance  # noqa: E402
 from nvidia_gui.adapters.vdf_lite import loads, dumps  # noqa: E402
 
 
@@ -667,6 +668,48 @@ def test_gpu_query_parses_csv_and_normalises_na() -> None:
     assert snap2.fan_pct == "33"
 
 
+def test_vibrance_is_available_checks_shutil_which() -> None:
+    v = NvibrantVibrance()
+    with mock.patch("shutil.which", return_value="/usr/bin/nvibrant"):
+        assert v.is_available() is True
+    with mock.patch("shutil.which", return_value=None):
+        assert v.is_available() is False
+
+
+def test_vibrance_detect_displays_parses_nvibrant_stdout() -> None:
+    stdout = (
+        "Driver version: (610.43.03)\n"
+        "\n"
+        "Display 0:\n"
+        "• (0, HDMI) • Set vibrance (    0) • Success\n"
+        "• (1, DP  ) • Set vibrance (    0) • None\n"
+    )
+    with mock.patch("shutil.which", return_value="/usr/bin/nvibrant"), \
+         mock.patch("subprocess.run", return_value=_fake_run(stdout)):
+        v = NvibrantVibrance()
+        disps = v.detect_displays()
+
+    assert len(disps) == 2
+    assert disps[0] == {"connector_id": 0, "type": "HDMI", "connected": True}
+    assert disps[1] == {"connector_id": 1, "type": "DP", "connected": False}
+
+
+def test_vibrance_set_vibrance_calls_subprocess() -> None:
+    settings = _FakeSettings()
+
+    with mock.patch("shutil.which", return_value="/usr/bin/nvibrant"), \
+         mock.patch("subprocess.run", return_value=_fake_run("", rc=0)) as run_mock:
+        v = NvibrantVibrance(settings=settings)
+        ok = v.set_vibrance([500, 0])
+
+    assert ok is True
+    run_mock.assert_called_once_with(
+        ["/usr/bin/nvibrant", "500", "0"],
+        capture_output=True, text=True, timeout=5, check=False
+    )
+    assert settings.get("vibrance.values") == [500, 0]
+
+
 def test_game_model_rejects_empty_identity() -> None:
     try:
         Game(appid="", name="x", installdir="d")
@@ -947,11 +990,9 @@ def test_detector_merge_bundled_wins_offline_with_install_dll() -> None:
     import tempfile
     from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
 
-    # Confirm the documented default: the online community-DB tier is OPT-IN
-    # and OFF by default (the import-time module global is the empty string).
-    assert _fd_mod._FEATURE_DB_URL == "", (
-        "online tier must default to skip (NVIDIA_GUI_FEATURE_DB_URL off); "
-        "if this fails the test env set the env var -- a non-default state"
+    # Confirm the documented default: the online community-DB tier uses the hosted default URL.
+    assert _fd_mod._FEATURE_DB_URL == _fd_mod._DEFAULT_URL, (
+        "online tier must default to the hosted JSON database URL"
     )
 
     tmp = Path(tempfile.mkdtemp())
@@ -1113,6 +1154,32 @@ def test_detector_online_tier_failure_is_graceful() -> None:
     # generic note; pin the actual "unreachable" message so a swallow-regression
     # that drops it can no longer pass).
     assert "unreachable" in cap.notes, cap.notes
+
+
+def test_detector_online_tier_respects_settings_disabled() -> None:
+    import tempfile
+    tmp = Path(tempfile.mkdtemp())
+    bundled = _feature_db(tmp)
+    g = Game(appid="1091500", name="Cyberpunk 2077", installdir="Cyberpunk 2077")
+
+    # We pass a fake settings object where online_enabled is False.
+    # The online tier should skip and append "online disabled" to notes.
+    settings = _FakeSettings()
+    settings.set("feature_detection.online_enabled", False)
+
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", "https://example.invalid/db.json"):
+        det = _fd_mod.SteamFeatureDetector(
+            resolve_install=lambda _g: None,
+            steam_root=str(tmp / "no_prefix"),
+            settings=settings,
+            bundled_db=bundled,
+        )
+        cap = det.probe(g)
+
+    # The online tier was skipped because it's disabled, so bundled still decides
+    assert cap.dlss_sr.supported is True
+    assert cap.dlss_sr.source == FeatureSource.BUNDLED
+    assert "online disabled" in cap.notes
 
 
 # ---- umbrella 4: CYBERPUNK 1091500 regression against the REAL bundled DB -

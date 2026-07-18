@@ -1210,6 +1210,7 @@ class DriversView:
         # ``window.py`` passes ``self.sidebar.switch_to`` so the flip + the active-
         # rail highlight stay in lockstep with the sidebar either way.
         self._on_navigate = on_navigate
+        self._vibrance_deb = Debouncer(200)
         self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self._build()
 
@@ -1223,11 +1224,11 @@ class DriversView:
         b.append(TextRow("Module", info.module_name))
         b.append(TextRow("Module version", info.module_version or "—"))
         b.append(TextRow("Branch", info.branch or "—",
-                         accent=(info.branch == "open")))
+                          accent=(info.branch == "open")))
         b.append(TextRow("GPU", snap.gpu_name or "—"))
         b.append(TextRow("nvidia-settings writes",
-                         "Inert (NV-CONTROL needs X)" if info.compositor_incompatible
-                         else "available"))
+                          "Inert (NV-CONTROL needs X)" if info.compositor_incompatible
+                          else "available"))
         b.append(TextRow("modprobe.d config", info.modprobe_config_path or "—"))
         self._root.append(c)
 
@@ -1250,6 +1251,62 @@ class DriversView:
         openb.connect("clicked", self._on_open_dlss)
         b2.append(openb)
         self._root.append(c2)
+
+        # Digital Vibrance Section
+        if self.uc.is_vibrance_available():
+            displays = self.uc.detect_vibrance_displays()
+            if displays:
+                vc, vb = _card(
+                    "Digital Vibrance",
+                    "Configure NVIDIA Digital Vibrance saturation per physical output port. "
+                    "Works natively on Wayland/X11. Range: -1024 (grayscale) to 1023 (max saturation)."
+                )
+
+                saved_values = self.uc.setting("vibrance.values", [])
+                if len(saved_values) < len(displays):
+                    saved_values = (saved_values + [0] * len(displays))[:len(displays)]
+
+                has_connected = False
+                for i, d in enumerate(displays):
+                    if not d["connected"]:
+                        continue
+                    has_connected = True
+
+                    row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+                    row.set_margin_top(4)
+                    row.set_margin_bottom(4)
+
+                    label_text = f"{d['type']} (Port {d['connector_id']})"
+                    label = Gtk.Label(label=label_text, xalign=0)
+                    label.add_css_class("nvgui-row-label")
+                    label.set_hexpand(True)
+                    row.append(label)
+
+                    scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, -1024, 1023, 1)
+                    scale.set_value(saved_values[i])
+                    scale.set_size_request(200, -1)
+                    scale.set_draw_value(True)
+                    scale.set_value_pos(Gtk.PositionType.RIGHT)
+
+                    def _on_vibrance_changed(s, idx=i, disps=displays):
+                        val = int(s.get_value())
+                        current_vals = self.uc.setting("vibrance.values", [])
+                        if len(current_vals) < len(disps):
+                            current_vals = (current_vals + [0] * len(disps))[:len(disps)]
+                        current_vals[idx] = val
+                        self.uc.set_setting("vibrance.values", current_vals)
+                        self._vibrance_deb.schedule(lambda: self.uc.set_vibrance(current_vals))
+
+                    scale.connect("value-changed", _on_vibrance_changed)
+                    row.append(scale)
+                    vb.append(row)
+
+                if not has_connected:
+                    hint = Gtk.Label(label="No active displays connected to NVIDIA ports.", xalign=0)
+                    hint.add_css_class("nvgui-muted")
+                    vb.append(hint)
+
+                self._root.append(vc)
 
     def _on_open_dlss(self, _b) -> None:
         """Deep-link to the DLSS page via the out-of-rail nav seam. Guarded

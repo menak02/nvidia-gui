@@ -221,6 +221,25 @@ def build_settings_view(uc: "UseCases",
     mr_body.append(mr_row)
     root.append(mr_card)
 
+    # ---- Feature Detection ------------------------------------------------
+    fd_card, fd_body = _card(
+        "Feature Detection",
+        "Enable or disable fetching the community-maintained feature database for new/unlisted games.",
+    )
+    fd_active = bool(uc.setting("feature_detection.online_enabled", True))
+    fd_row = ToggleRow(
+        "Online feature database",
+        subtitle="Fetch community DLSS/Reflex capability lists over the network.",
+        active=fd_active,
+    )
+
+    def _on_online_enabled_toggled(_row: ToggleRow, active: bool) -> None:
+        uc.set_setting("feature_detection.online_enabled", bool(active))
+
+    fd_row.connect("toggled", _on_online_enabled_toggled)
+    fd_body.append(fd_row)
+    root.append(fd_card)
+
     # ---- About -----------------------------------------------------------
     about_card, about_body = _card("About", "")
     brand = Gtk.Label(label="NVIDIA-GUI", xalign=0)

@@ -1,0 +1,103 @@
+{
+  "games": [
+    {
+      "appid": "1091500",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": true,
+      "rt": true,
+      "note": "Path tracing + DLSS 3/4 frame generation + Reflex."
+    },
+    {
+      "appid": "1285190",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": true,
+      "rt": true,
+      "note": "Borderlands 4 - DLSS 4 SR+FG+MFG+RT (PCGamingWiki); Reflex 2 inferred from MFG."
+    },
+    {
+      "appid": "2169040",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": true,
+      "rt": true,
+      "note": "Path tracing + DLSS 3 FG + Reflex."
+    },
+    {
+      "appid": "2358720",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": true,
+      "rt": true
+    },
+    {
+      "appid": "1627720",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": true,
+      "rt": true,
+      "note": "DLSS 4 added frame gen; path-tracing patch."
+    },
+    {
+      "appid": "2420110",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": true,
+      "rt": true
+    },
+    {
+      "appid": "1145350",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": true,
+      "rt": false,
+      "note": "DLSS-SR + frame gen (no RT)."
+    },
+    {
+      "appid": "2163050",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": false,
+      "rt": false,
+      "note": "DLSS-SR + FG (DLSS4 update); no Reflex/RT."
+    },
+    {
+      "appid": "990080",
+      "dlss_sr": true,
+      "dlss_fg": true,
+      "reflex": false,
+      "rt": false,
+      "note": "DLSS-SR + FG; no RT/Reflex."
+    },
+    {
+      "appid": "1174180",
+      "dlss_sr": true,
+      "dlss_fg": false,
+      "reflex": false,
+      "rt": false,
+      "note": "DLSS-SR only (no FG/Reflex/RT on PC)."
+    },
+    {
+      "appid": "2680930",
+      "dlss_sr": true,
+      "dlss_fg": false,
+      "reflex": true,
+      "rt": false,
+      "note": "DLSS-SR + Reflex; no FG/RT."
+    },
+    {
+      "appid": "1888930",
+      "dlss_sr": true,
+      "dlss_fg": false,
+      "reflex": false,
+      "rt": false,
+      "note": "DLSS-SR only."
+    },
+    {
+      "appid": "3357650",
+      "dlss_sr": true,
+      "note": "Pragmata (RE Engine) - DLSS-SR confirmed; reflex/dlss_fg/rt UNSET so universal probes decide (honest, not decisive-false). RE Engine packs DLLs in .pak archives so loose-DLL probes cannot reach it - curation is the only mechanism."
+    }
+  ]
+}

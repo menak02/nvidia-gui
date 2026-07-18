@@ -23,6 +23,7 @@ from .adapters.kernel_param_modprobe import ModprobeKernelParam
 from .adapters.launch_option_steam import SteamLaunchOptions
 from .adapters.profile_store_fs import FsProfileStore
 from .adapters.system_info import EnvDisplayInfo, SmiDriverInfo
+from .adapters.vibrance_nvibrant import NvibrantVibrance
 from .application.use_cases import UseCases
 from .domain.models import Game
 
@@ -65,6 +66,7 @@ def _wire(cfg) -> UseCases:
             bundled_db=pathlib.Path(__file__).parent / "assets" / "nvidia_features.toml",
         ),
         settings=settings,
+        vibrance=NvibrantVibrance(settings=settings),
     )
 
 

@@ -256,3 +256,42 @@ class SettingsPort(ABC):
     @abstractmethod
     def set(self, dotted: str, value: Any) -> None:
         ...
+
+
+# ---------------------------------------------------------------------------
+#  Digital Vibrance ( Wayland-safe display attributes )
+# ---------------------------------------------------------------------------
+class VibrancePort(ABC):
+    """Query and apply NVIDIA Digital Vibrance settings using the nvibrant helper.
+
+     डिजिटल वाइब्रेंस regulates color saturation per physical display connector.
+    Values range from -1024 (grayscale) to 1023 (max saturation), with 0 being
+    the hardware default at boot.
+    """
+
+    @abstractmethod
+    def is_available(self) -> bool:
+        """True if the nvibrant binary/command is available on PATH."""
+        ...
+
+    @abstractmethod
+    def detect_displays(self) -> list[dict[str, Any]]:
+        """Run nvibrant to probe display outputs.
+
+        Returns a list of dictionaries, one for each connector:
+        {
+            "connector_id": int,
+            "type": str,       # e.g., "HDMI", "DP"
+            "connected": bool,
+        }
+        """
+        ...
+
+    @abstractmethod
+    def set_vibrance(self, values: list[int]) -> bool:
+        """Apply vibrance values for all physical display outputs.
+
+        The list length must match the number of connectors reported.
+        Returns True on success, False on failure.
+        """
+        ...

@@ -66,9 +66,10 @@ logger = logging.getLogger(__name__)
 # who actually wants this tier should point the URL at a real DLSS-games JSON
 # whose entries carry dlss_sr/dlss_fg/reflex/rt booleans.
 
-_FEATURE_DB_URL = os.environ.get("NVIDIA_GUI_FEATURE_DB_URL", "")
+_DEFAULT_URL = "https://raw.githubusercontent.com/menak02/nvidia-gui/main/src/nvidia_gui/assets/nvidia_features.json"
+_FEATURE_DB_URL = os.environ.get("NVIDIA_GUI_FEATURE_DB_URL", _DEFAULT_URL)
 _CACHE_PATH = pathlib.Path.home() / ".cache" / "nvidia-gui" / "feature_cache.json"
-_CACHE_TTL_S = 24 * 60 * 60  # ~24h
+_CACHE_TTL_S = 7 * 24 * 60 * 60  # 7-day TTL
 _HTTP_TIMEOUT = 6.0
 
 # The four feature kinds, in the order GameCapability exposes them.
@@ -213,9 +214,19 @@ class SteamFeatureDetector(FeatureDetectionPort):
         network/parse/cache failure degraded it -- the caller surfaces this in
         ``notes``. Never raises.
         """
+        enabled = True
+        if self._settings is not None:
+            try:
+                enabled = self._settings.get("feature_detection.online_enabled", True)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("failed to read online_enabled setting: %s", exc)
+                notes.append(f"settings read failed ({exc.__class__.__name__})")
+        if not enabled:
+            notes.append("online disabled")
+            return None, True
+
         url = _FEATURE_DB_URL
         if not url:
-            # OPT-IN offline-safe default (see module docstring): skip the tier.
             return None, True
         try:
             data = self._fetch_or_cache(url, notes)
