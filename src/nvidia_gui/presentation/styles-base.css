@@ -27,8 +27,6 @@ window {
     font-family: "NVIDIA Sans", Inter, "Helvetica Neue", Roboto, sans-serif;
     font-size: 14px;
     background: transparent;
-    box-sizing: border-box;  /* padding lives inside declared widths, never causes overflow */
-    word-wrap: break-word;
 }
 
 /* ================================================================ Typography / Code */
@@ -685,7 +683,6 @@ scale:disabled slider {
     letter-spacing: 0.8px;
     text-transform: uppercase;
     margin-bottom: 8px;
-    text-align: center;
 }
 
 .nvgui-metric-value {
@@ -694,7 +691,6 @@ scale:disabled slider {
     font-size: 1.6rem;
     font-weight: 700;
     letter-spacing: -0.5px;
-    text-align: center;
 }
 
 /* Semantic threshold colours: green = normal live reading */
