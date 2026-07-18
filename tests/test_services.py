@@ -1109,20 +1109,20 @@ def test_detector_never_raises_all_tiers_fail() -> None:
         # the bundled-db read all failing concurrently.
         cap = det.probe(g)
 
-    assert cap.is_known() is False
-    assert cap.dlss_sr.source == FeatureSource.UNKNOWN
-    assert cap.dlss_fg.source == FeatureSource.UNKNOWN
-    assert cap.reflex.source == FeatureSource.UNKNOWN
-    assert cap.rt.source == FeatureSource.UNKNOWN
-    # Every exploded tier must surface in notes -- NOT just the trivial "offline"
-    # skip note. This pins the honesty property: a tier crashing ("bundled DB
-    # unreadable") must be distinguishable in notes from a tier finding nothing.
-    # Before the per-tier-note fix this passed on the bare "offline" string alone.
-    assert "override read failed" in cap.notes, cap.notes
-    assert "bundled DB unreadable" in cap.notes, cap.notes
-    assert "install resolve failed" in cap.notes, cap.notes
-    # and the use-case facade propagates the never-raise guarantee
-    assert _uc(detection=det).detect_game_features(g).is_known() is False
+        assert cap.is_known() is False
+        assert cap.dlss_sr.source == FeatureSource.UNKNOWN
+        assert cap.dlss_fg.source == FeatureSource.UNKNOWN
+        assert cap.reflex.source == FeatureSource.UNKNOWN
+        assert cap.rt.source == FeatureSource.UNKNOWN
+        # Every exploded tier must surface in notes -- NOT just the trivial "offline"
+        # skip note. This pins the honesty property: a tier crashing ("bundled DB
+        # unreadable") must be distinguishable in notes from a tier finding nothing.
+        # Before the per-tier-note fix this passed on the bare "offline" string alone.
+        assert "override read failed" in cap.notes, cap.notes
+        assert "bundled DB unreadable" in cap.notes, cap.notes
+        assert "install resolve failed" in cap.notes, cap.notes
+        # and the use-case facade propagates the never-raise guarantee
+        assert _uc(detection=det).detect_game_features(g).is_known() is False
 
 
 def test_detector_online_tier_failure_is_graceful() -> None:
