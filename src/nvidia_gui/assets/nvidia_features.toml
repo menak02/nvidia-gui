@@ -104,3 +104,8 @@ dlss_fg = false
 reflex = false
 rt = false
 note = "DLSS-SR only."
+
+[[games]]
+appid = "3357650"   # Pragmata
+dlss_sr = true
+note = "Pragmata (RE Engine) - DLSS-SR confirmed; reflex/dlss_fg/rt UNSET so universal probes decide (honest, not decisive-false). RE Engine packs DLLs in .pak archives so loose-DLL probes cannot reach it - curation is the only mechanism."

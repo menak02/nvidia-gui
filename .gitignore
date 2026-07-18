@@ -11,6 +11,7 @@ dist/
 # --- Local tooling indices / session state (machine-generated, not source) ---
 .codegraph/
 .tailtest/
+HANDOFF.md
 
 # --- Secrets & sensitive runtime state (NEVER commit) ---
 .env

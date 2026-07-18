@@ -1177,6 +1177,42 @@ def test_borderlands4_1285190_curated_regression_via_real_bundled_db() -> None:
     assert cap.notes
 
 
+# ---- umbrella 4b-ii: PRAGMATA (3357650) curated regression ---------------
+# Packed-engine games (RE Engine .pak archives) have no loose nvngx_dlss.dll
+# on disk, so DLL probes can never reach them. Curation is the only mechanism.
+# dlss_sr=true is asserted; reflex/dlss_fg/rt are UNSET (not false) so the
+# universal probes decide honestly when an install is present.
+def test_pragmata_3357650_curated_regression_via_real_bundled_db() -> None:
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    real_db = (Path(__file__).resolve().parent.parent / "src" / "nvidia_gui"
+               / "assets" / "nvidia_features.toml")
+    assert real_db.is_file(), f"bundled feature DB missing: {real_db}"
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda _g: None,
+            steam_root=str(Path(tempfile.mkdtemp())),
+            settings=None,
+            bundled_db=real_db,
+        )
+        pragmata = Game(appid="3357650", name="Pragmata",
+                        installdir="Pragmata")
+        cap = det.probe(pragmata)
+    # Pragmata: DLSS-SR confirmed via curated row; reflex/dlss_fg/rt UNSET in
+    # the DB and no install/prefix -> all UNKNOWN.
+    assert cap.dlss_sr.supported is True
+    assert cap.dlss_sr.source == FeatureSource.BUNDLED
+    assert cap.dlss_fg.supported is False
+    assert cap.dlss_fg.source == FeatureSource.UNKNOWN
+    assert cap.reflex.supported is False
+    assert cap.reflex.source == FeatureSource.UNKNOWN
+    assert cap.rt.supported is False
+    assert cap.rt.source == FeatureSource.UNKNOWN
+    assert cap.is_known() is True
+    assert cap.notes
+
+
 # ---- umbrella 4c: install-dir probe covers Binaries/Win64 (general fix) ---
 # The GENERAL robustness fix, not just the curated row: an UNLISTED game (a
 # fictional appid with NO curated row) whose nvngx_dlss.dll ships in the UE-style
