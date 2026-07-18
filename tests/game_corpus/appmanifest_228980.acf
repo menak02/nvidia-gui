@@ -1,0 +1,32 @@
+"AppState"
+{
+	"appid"		"228980"
+	"Universe"		"1"
+	"name"		"Steamworks Common Redistributables"
+	"StateFlags"		"4"
+	"installdir"		"Steamworks Shared"
+	"TargetBuildID"		"17000000"
+	"AutoUpdateBehavior"		"0"
+	"AllowOtherDownloadsWhileRunning"		"0"
+	"ScheduledAutoUpdate"		"0"
+	"InstalledDepots"
+	{
+		"228981"		"52428800"
+		"228982"		"52428800"
+		"228990"		"104857600"
+	}
+	"StagedReadyToDeploy"		"0"
+	"BuildID"		"17000000"
+	"LastUpdated"		"1730000000"
+	"SizeOnDisk"		"209715200"
+	"UserConfig"
+	{
+	}
+	"MountedConfig"
+	{
+	}
+	"InstallScripts"
+	{
+		"0"		"SteamworksSharedInstall.vdf"
+	}
+}

@@ -1319,6 +1319,81 @@ def test_acf_parser_breadth_multi_library_and_broken_manifest() -> None:
     assert raised, "the broken acf must raise VdfError -- scan() relies on the catch"
 
 
+def test_acf_parser_filters_steam_tools_runtimes_and_proton() -> None:
+    """Tool / runtime / redistributable manifests install BESIDE games under
+    steamapps/ (Proton variants, the Steam Linux Runtimes, Steamworks Common
+    Redistributables). The ACF has no ``app_type`` field, so the parser must
+    discriminate from on-disk tells and NEVER surface those as launchable games.
+
+    Covers three cases: (a) three real curated Valve-tool appids 1493710 /
+    1628350 / 228980 -- caught by the blocklist AND the installdir heuristic;
+    (b) two FUTURE tools carrying appids NOT in the curated blocklist (a
+    hypothetical Proton 11.0 + SLR 5.0) -- caught by the installdir-pattern
+    heuristic alone, proving the filter ages with Steam rather than needing
+    every new tool appid hand-added; (c) two real games that MUST survive the
+    filter unchanged.
+    """
+    import shutil
+    import tempfile
+    from nvidia_gui.adapters.game_library_steam import SteamLibrary
+
+    corpus = Path(__file__).resolve().parent / "game_corpus"
+
+    # future tool with an appid NOT in the curated blocklist; installdir
+    # beginning "Proton" is the future-proof tell that must catch it.
+    future_proton = (
+        '"AppState"\n'
+        '{\n'
+        '\t"appid"\t\t"5001111"\n'
+        '\t"name"\t\t"Proton 11.0"\n'
+        '\t"installdir"\t\t"Proton 11.0"\n'
+        '\t"StateFlags"\t\t"4"\n'
+        '}\n'
+    )
+    # future Steam Linux Runtime, also outside the blocklist; the
+    # "SteamLinuxRuntime_*" installdir prefix is the future-proof tell.
+    future_slr = (
+        '"AppState"\n'
+        '{\n'
+        '\t"appid"\t\t"5002222"\n'
+        '\t"name"\t\t"Steam Linux Runtime 5.0 (future)"\n'
+        '\t"installdir"\t\t"SteamLinuxRuntime_future"\n'
+        '\t"StateFlags"\t\t"4"\n'
+        '}\n'
+    )
+
+    with tempfile.TemporaryDirectory() as td:
+        td = Path(td)
+        root = td / "steam"
+        sa = root / "steamapps"
+        sa.mkdir(parents=True)
+        # two real games that must survive the filter
+        shutil.copy(corpus / "appmanifest_1091500.acf", sa / "appmanifest_1091500.acf")
+        shutil.copy(corpus / "appmanifest_4400001.acf", sa / "appmanifest_4400001.acf")
+        # three real curated Valve-tool manifests -- blocklist + heuristic
+        shutil.copy(corpus / "appmanifest_1493710.acf", sa / "appmanifest_1493710.acf")
+        shutil.copy(corpus / "appmanifest_1628350.acf", sa / "appmanifest_1628350.acf")
+        shutil.copy(corpus / "appmanifest_228980.acf", sa / "appmanifest_228980.acf")
+        # two future tool manifests outside the blocklist -- heuristic only
+        (sa / "appmanifest_5001111.acf").write_text(future_proton, encoding="utf-8")
+        (sa / "appmanifest_5002222.acf").write_text(future_slr, encoding="utf-8")
+
+        games = SteamLibrary(steam_root=root).scan()
+        by_id = {g.appid: g for g in games}
+
+    # every tool / runtime / proton variant is filtered OUT, never launchable
+    assert "1493710" not in by_id, "Proton Experimental must be filtered"
+    assert "1628350" not in by_id, "Steam Linux Runtime sniper must be filtered"
+    assert "228980" not in by_id, "Steamworks Redistributables must be filtered"
+    assert "5001111" not in by_id, "future Proton (heuristic, uncurated) must be filtered"
+    assert "5002222" not in by_id, "future SLR (heuristic, uncurated) must be filtered"
+
+    # and exactly the two real games survive -- nothing else
+    assert len(games) == 2, [g.appid for g in games]
+    assert by_id["1091500"].name == "Cyberpunk 2077"
+    assert by_id["4400001"].name == "Titan Sieve"
+
+
 def test_version_never_lies_dev_fallback_when_uninstalled() -> None:
     """uc.version() honors the confidence-tiered fallback: installed metadata is
     authoritative; the SettingsPort ``app.version`` is the secondary; a totally

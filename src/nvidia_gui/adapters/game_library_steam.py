@@ -12,6 +12,53 @@ from .vdf_lite import loads
 
 logger = logging.getLogger(__name__)
 
+# --- Steam tool / runtime / redistributable filter --------------------------
+# Steam installs non-game "tool" manifests BESIDE real games under steamapps/
+# (Proton variants, the Steam Linux Runtimes, Steamworks Common Redistributables).
+# The ACF carries NO ``app_type`` field -- Valve encodes tool-vs-game only in the
+# private Steam registry, not the manifest -- so the parser must discriminate
+# from stable on-disk tells: the ``installdir`` (tools install under
+# ``SteamLinuxRuntime_*`` / ``Proton*`` / the redist dir ``Steamworks Shared``;
+# real games never colocate there) plus the display name, AND a curated Valve-
+# tool appid blocklist as belt-and-suspenders for any tool that renames. The
+# installdir/name patterns catch tools that join Steam LATER (a future Proton
+# 11.0 / SLR 5.0 ships with the same naming convention), so the filter ages
+# with Steam rather than needing every new tool appid hand-added.
+_STEAM_TOOL_APPIDS: frozenset[str] = frozenset({
+    "228980",   # Steamworks Common Redistributables (depots that games share)
+    "1070560",  # Steam Linux Runtime 1.0 (scout)
+    "1391110",  # Steam Linux Runtime 2.0 (soldier)
+    "1628350",  # Steam Linux Runtime 3.0 (sniper)
+    "4183110",  # Steam Linux Runtime 4.0
+    "1493710",  # Proton Experimental
+    "2180100",  # Proton Hotfix
+    "3658110",  # Proton 10.0
+})
+
+
+def _looks_like_steam_tool(name: str, installdir: str, appid: str) -> bool:
+    """True if this manifest is a Steam tool/runtime/redistributable, not a game.
+
+    Order: curated appid blocklist first (decisive for known tools), then the
+    installdir prefix / exact-match tells (future-proof), then the display-name
+    fallback. A real game has never shipped under one of these installdirs.
+    """
+    if appid in _STEAM_TOOL_APPIDS:
+        return True
+    inst = installdir.lower().strip()
+    if inst.startswith("steamlinuxruntime"):
+        return True
+    # "Proton - Experimental", "Proton Hotfix", "Proton 10.0" all install under
+    # an installdir beginning "Proton"; games do not.
+    if inst == "proton" or inst.startswith("proton ") or inst.startswith("proton-"):
+        return True
+    if inst == "steamworks shared":
+        return True
+    nm = name.lower()
+    if "steamworks common redistributables" in nm:
+        return True
+    return False
+
 
 class SteamLibrary(GameLibraryPort):
     """Scan one or more Steam library roots for installed appmanifests.
@@ -78,8 +125,14 @@ class SteamLibrary(GameLibraryPort):
             return None
         name = st.get("name") or ""
         installdir = st.get("installdir") or ""
-        # skip tools/empty manifests
+        # skip empty manifests
         if not name or not installdir:
+            return None
+        # skip Steam tools/runtimes/redistributables that install beside games
+        # under steamapps/ (Proton, SLR, Steamworks Redistributables) -- they
+        # would otherwise show up as fake "games" the user can't launch. See
+        # :func:`_looks_like_steam_tool` for the discriminator rationale.
+        if _looks_like_steam_tool(name, installdir, appid):
             return None
         return Game(
             appid=appid,
