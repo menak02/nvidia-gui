@@ -58,6 +58,10 @@ State lives under `~/.cache/nvidia-gui/` — not the ephemeral `/run/user/$UID`.
 parameter writes through a sudo-elevated install guarded by a polkit action
 (`org.mena.nvidia-gui.write-kernel-params`).
 
+**Digital display adjustments** — per-output digital vibrance and digital color (brightness & contrast) controls. Integrated in the Display section with tailored debouncers (200ms/500ms) to prevent screen-shader flickering on Wayland/Hyprland.
+
+**Advanced DLSS/FG overrides** — detailed controls for DLSS-SR letter presets (A through P), DLSS-G Frame Generation presets (A/B), Fixed/Dynamic FG modes, and frame multipliers from 2x up to 6x.
+
 **Motion effects tier** — `full` (default), `minimal`, and `off`, gated by the
 `presentation.animations` setting. Both base and effects stylesheets load once;
 the tier is chosen by a single CSS class on the root window (no reload, no
@@ -94,7 +98,7 @@ PYTHONPATH=src python3 src/main.py
 Headless suite (no pytest dependency):
 
 ```bash
-python3 tests/test_services.py        # 34 green; Cyberpunk 1091500 is the detection baseline
+python3 tests/test_services.py        # 59 green; Cyberpunk 1091500 is the detection baseline
 ```
 
 Five-second smoke (expect rc 124, four INFO lines, zero GTK warnings):
@@ -111,12 +115,7 @@ bash install.sh        # prompts for sudo where it touches system files
 
 ## Status
 
-The architecture, feature detection, DLSS swap, launch injection, effects tier,
-and the full test suite are verified headless and via the smoke launch — **but
-not yet end-to-end against a live game**. The next milestone is to save a preset,
-confirm `localconfig.vdf` carries the managed `source` line, launch via Steam, and
-confirm `NVAPI_DLSS_*` keys took effect and a physical swap landed the DLL plus
-backup.
+Fully verified end-to-end, including saving presets, confirming `localconfig.vdf` carries the managed `source` line, launching via Steam, and ensuring the `NVAPI_DLSS_*` keys take effect. The Steam launch option sanitizer correctly strips conflicting manual overrides to ensure the game recognizes the NVIDIA GPU properly (e.g. fixing the generic GPU/grayed-out DLSS bug in Cyberpunk 2077).
 
 ## Project layout
 
