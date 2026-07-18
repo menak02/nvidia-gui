@@ -144,13 +144,11 @@ class MainWindow(Gtk.ApplicationWindow):
         title_box.append(self._live_label)
         topbar.append(title_box)
 
-        # ---- body: sidebar | stack  (Gtk.Paned, draggable divider) ----
+        # ---- body: sidebar | stack (flex layout) ----
         self.sidebar = NavSidebar()
-        # A modest rail floor — NOT the old 280px hard block. With the Paned's
-        # shrink flags off, the start child can't be dragged below this floor,
-        # but the whole window no longer refuses a narrow tile (the end child
-        # shrinks and the hamburger covers the collapsed case).
-        self.sidebar.set_size_request(160, -1)
+        self.sidebar.set_size_request(-1, -1)  # Naturally scale to content (fit-content)
+        self.sidebar.set_hexpand(False)
+        self.sidebar.set_halign(Gtk.Align.START)
 
         self.stack = Gtk.Stack()
         self.stack.set_vexpand(True)
@@ -189,7 +187,11 @@ class MainWindow(Gtk.ApplicationWindow):
                 )
             elif name == "settings":
                 self.stack.add_named(
-                    build_settings_view(uc, on_anim_changed=self._on_anim_changed),
+                    build_settings_view(
+                        uc,
+                        on_anim_changed=self._on_anim_changed,
+                        on_motion_reduce=self._on_motion_reduce_changed,
+                    ),
                     name,
                 )
         # Restore the last-viewed page (persisted "presentation.active_page").
@@ -206,24 +208,17 @@ class MainWindow(Gtk.ApplicationWindow):
         # hamburger's switch_to, and future keyboard accelerators alike.
         self.stack.connect("notify::visible-child", self._on_page_changed)
 
-        self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
-        # shrink=False: respect each child's modest floor instead of letting the
-        # divider drag a child to zero (the hamburger collapse is the zero-width
-        # path). The end child thus can't be forced smaller than its content's
-        # natural minimum — far smaller than the old 280px list floor.
-        self._paned.set_shrink_start_child(False)
-        self._paned.set_shrink_end_child(False)
-        self._paned.set_start_child(self.sidebar)
-        self._paned.set_end_child(self.stack)
-        self._paned.set_position(self._sidebar_w)
-        self._paned.connect("notify::position", self._on_paned_position)
+        # ---- assemble flex container ---------------------------------
+        # The split box matches display: flex; flex-direction: row
+        self._split_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self._split_box.append(self.sidebar)
+        self._split_box.append(self.stack)
 
-        # ---- assemble ------------------------------------------------
         main = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         main.append(topbar)
         sep = Gtk.Separator()
         main.append(sep)
-        main.append(self._paned)
+        main.append(self._split_box)
         # Status bar: persistent bottom feedback line (last action / error / ipc path)
         self.statusbar = StatusBar()
         main.append(self.statusbar)
@@ -267,11 +262,22 @@ class MainWindow(Gtk.ApplicationWindow):
         """
         if not tier:
             tier = "full"
+        self.uc.set_setting("presentation.animations", tier)
+        if self.uc.setting("presentation.motion_reduce", False):
+            tier = "off"
+        self._apply_motion_tier(tier)
+
+    def _on_motion_reduce_changed(self, active: bool) -> None:
+        """Handle accessibility motion reduction toggle."""
+        tier = "off" if active else self.uc.setting("presentation.animations", "full")
+        self._apply_motion_tier(tier)
+
+    def _apply_motion_tier(self, tier: str) -> None:
+        """Helper to modify window class list and update components for motion control."""
         for cls in self.get_css_classes():
             if cls.startswith("nvgui-motion-"):
                 self.remove_css_class(cls)
         self.add_css_class(f"nvgui-motion-{tier}")
-        self.uc.set_setting("presentation.animations", tier)
         # Re-scope the save toast to the new tier (guarded: the boot call at
         # __init__ runs before self.toast is constructed).
         toast = getattr(self, "toast", None)

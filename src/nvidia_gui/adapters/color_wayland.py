@@ -84,7 +84,7 @@ class WaylandColorAdapter(ColorPort):
         return displays
 
     def set_color(self, connector_id: str, brightness: float, contrast: float) -> bool:
-        """Apply brightness and contrast using hyprctl screen shader (on Hyprland) or wl-gammarelay-rs."""
+        """Apply brightness and contrast using wl-gammarelay-rs (output-specific) or hyprctl screen shader (global fallback)."""
         if not self.is_available():
             return False
 
@@ -93,7 +93,69 @@ class WaylandColorAdapter(ColorPort):
         c_val = max(0.1, min(3.0, contrast))
 
         import os
-        # 1. Primary path: If we are on Hyprland, generate a custom screen shader dynamically
+
+        # 1. Primary path: wl-gammarelay-rs (supports per-output settings)
+        if self._is_gammarelay_active():
+            dbus_output = connector_id.replace("-", "_").replace(".", "_")
+            try:
+                # Try setting on specific output first
+                res_b = subprocess.run(
+                    [
+                        self._bin_busctl, "--user", "set-property",
+                        "rs.wl-gammarelay", f"/outputs/{dbus_output}", "rs.wl.gammarelay",
+                        "Brightness", "d", str(b_val)
+                    ],
+                    capture_output=True,
+                    timeout=3,
+                    check=False,
+                )
+                res_g = subprocess.run(
+                    [
+                        self._bin_busctl, "--user", "set-property",
+                        "rs.wl-gammarelay", f"/outputs/{dbus_output}", "rs.wl.gammarelay",
+                        "Gamma", "d", str(c_val)
+                    ],
+                    capture_output=True,
+                    timeout=3,
+                    check=False,
+                )
+                
+                # If per-output commands succeeded
+                if res_b.returncode == 0:
+                    if self._settings is not None:
+                        self._settings.set(f"color.{connector_id}.brightness", b_val)
+                        self._settings.set(f"color.{connector_id}.contrast", c_val)
+                    return True
+                
+                # Fallback to global path if per-output failed
+                subprocess.run(
+                    [
+                        self._bin_busctl, "--user", "set-property",
+                        "rs.wl-gammarelay", "/", "rs.wl.gammarelay",
+                        "Brightness", "d", str(b_val)
+                    ],
+                    capture_output=True,
+                    timeout=3,
+                    check=True,
+                )
+                subprocess.run(
+                    [
+                        self._bin_busctl, "--user", "set-property",
+                        "rs.wl-gammarelay", "/", "rs.wl.gammarelay",
+                        "Gamma", "d", str(c_val)
+                    ],
+                    capture_output=True,
+                    timeout=3,
+                    check=True,
+                )
+                if self._settings is not None:
+                    self._settings.set(f"color.{connector_id}.brightness", b_val)
+                    self._settings.set(f"color.{connector_id}.contrast", c_val)
+                return True
+            except Exception as exc:
+                logger.warning("wl-gammarelay set_color failed: %s", exc)
+
+        # 2. Fallback path: If we are on Hyprland, generate a custom screen shader dynamically (applies to all monitors)
         if shutil.which("hyprctl") is not None and os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
             shader_path = "/tmp/nvgui_color.frag"
             shader_content = f"""#version 300 es
@@ -129,26 +191,5 @@ void main() {{
             except Exception as exc:
                 logger.warning("Hyprland set_color shader failed: %s", exc)
 
-        # 2. Fallback path: wl-gammarelay-rs
-        if not self._is_gammarelay_active():
-            return False
+        return False
 
-        try:
-            subprocess.run(
-                [
-                    self._bin_busctl, "--user", "set-property",
-                    "rs.wl-gammarelay", "/", "rs.wl.gammarelay",
-                    "Brightness", "d", str(b_val)
-                ],
-                capture_output=True,
-                timeout=3,
-                check=True,
-            )
-            
-            if self._settings is not None:
-                self._settings.set(f"color.{connector_id}.brightness", b_val)
-                self._settings.set(f"color.{connector_id}.contrast", c_val)
-            return True
-        except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
-            logger.warning("wl-gammarelay set_color failed: %s", exc)
-            return False

@@ -104,17 +104,28 @@ class ToggleRow(Gtk.Box):
         left.append(l)
         if subtitle:
             s = Gtk.Label(label=subtitle, xalign=0, wrap=True)
-            s.add_css_class("nvgui-card-subtle")
+            if subtitle.startswith("DXVK_") or subtitle.startswith("PROTON_") or subtitle.startswith("VKD3D_"):
+                s.add_css_class("nvgui-env-var")
+            else:
+                s.add_css_class("nvgui-card-subtle")
             left.append(s)
         self.append(left)
         self._sw = Gtk.Switch()
         self._sw.set_active(active)
         self._sw.set_valign(Gtk.Align.CENTER)
+        self._update_style(active)
         self._sw.connect("notify::active", self._on_active)
         self.append(self._sw)
 
     def _on_active(self, _sw, _pspec) -> None:
-        self.emit("toggled", self._sw.get_active())
+        active = self._sw.get_active()
+        self.emit("toggled", active)
+
+    def _update_style(self, _active: bool) -> None:
+        # State is communicated entirely by the switch track/thumb colour —
+        # no row-level class manipulation needed. Kept as a no-op so subclasses
+        # or future callers that override it don't break.
+        pass
 
     @property
     def active(self) -> bool:
@@ -122,17 +133,18 @@ class ToggleRow(Gtk.Box):
 
     def set_active(self, val: bool) -> None:
         self._sw.set_active(val)
+        self._update_style(val)
 
 
 class TextRow(Gtk.Box):
-    """A label + readonly value row (forced key:value display)."""
+    """A label + readonly value row (compact: value sits immediately right of key)."""
 
     def __init__(self, key: str, value: str = "", accent: bool = False) -> None:
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         k = Gtk.Label(label=key, xalign=0)
         k.add_css_class("nvgui-row-label")
-        v = Gtk.Label(label=value or "—", xalign=1)
-        v.set_hexpand(True)
+        k.set_size_request(120, -1)  # fixed key width — prevents value jumping
+        v = Gtk.Label(label=value or "—", xalign=0)
         v.add_css_class("nvgui-row-value")
         if accent:
             v.add_css_class("accent")
@@ -305,10 +317,18 @@ class SaveToast(Gtk.Revealer):
         self.set_reveal_child(False)
         self.set_halign(Gtk.Align.CENTER)
         self.set_valign(Gtk.Align.END)
-        self.add_css_class("nvgui-toast")
+        # IMPORTANT: the nvgui-toast CSS class is on an INNER box, NOT on the
+        # Revealer itself. A Revealer with CSS background/border/padding on its
+        # own node renders the box at the bottom even when reveal_child=False
+        # (the Revealer collapses its child's allocated space but still paints
+        # its own CSS box). Inner-box approach: Revealer is fully transparent;
+        # only the inner box carries the dark-green tinted background.
+        inner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        inner.add_css_class("nvgui-toast")
         self._label = Gtk.Label(label="", xalign=0.5, wrap=True)
         self._label.add_css_class("nvgui-toast-label")
-        self.set_child(self._label)
+        inner.append(self._label)
+        self.set_child(inner)
 
     def set_instant(self, instant: bool) -> None:
         """Motion-tier switch: instant (the ``off`` tier) skips the slide."""

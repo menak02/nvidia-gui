@@ -32,14 +32,18 @@ window.nvgui-motion-full switch slider {
 }
 
 window.nvgui-motion-full scale slider {
-    transition: background-color 150ms ease, border-color 150ms ease;
+    transition: background-color 150ms ease, border-color 150ms ease, min-width 120ms ease, min-height 120ms ease, margin 120ms ease;
 }
 
 /* Navbar hover-glow: smooth the background/border/colour shift on hover and on
  * the active rail highlight. NO box-shadow / blur -- the existing solid colours
  * easing in IS the glow. */
 window.nvgui-motion-full .nvgui-nav-btn {
-    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, border-left-width 150ms ease-out;
+}
+
+window.nvgui-motion-full .active-override {
+    transition: padding-left 150ms ease, border-left-color 150ms ease, border-left-width 150ms ease;
 }
 
 /* Save toast: a Gtk.Revealer's reveal, with the CSS transition on the

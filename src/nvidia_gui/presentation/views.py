@@ -96,17 +96,64 @@ def _card(title: str, subtitle: str = "") -> tuple[Gtk.Box, Gtk.Box]:
     t.add_css_class("nvgui-card-title")
     t.set_hexpand(True)
     head.append(t)
-    dot = Gtk.Box()
-    dot.add_css_class("nvgui-corner")
-    head.append(dot)
+    # No corner badge — card titles are clean text only
     card.append(head)
     if subtitle:
         s = Gtk.Label(label=subtitle, xalign=0, wrap=True)
         s.add_css_class("nvgui-card-subtle")
         card.append(s)
-    body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
     card.append(body)
     return card, body
+
+
+def _dropdown_row(title: str, env_var: str, dropdown: Gtk.DropDown) -> Gtk.Box:
+    row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    # Top box with title and env var
+    top = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    t = Gtk.Label(label=title, xalign=0)
+    t.add_css_class("nvgui-row-label")
+    top.append(t)
+    if env_var:
+        e = Gtk.Label(label=env_var, xalign=0, wrap=True)
+        e.add_css_class("nvgui-env-var")
+        top.append(e)
+    row.append(top)
+    dropdown.set_halign(Gtk.Align.START)
+    row.append(dropdown)
+    return row
+
+
+def _page_header(title_text: str, extra_widgets: list[Gtk.Widget] | None = None) -> Gtk.Box:
+    """Return a styled page header box with title and spacer row for extra widgets."""
+    container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    container.set_margin_bottom(12)
+
+    top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    top.set_valign(Gtk.Align.CENTER)
+
+    t = Gtk.Label(label=title_text)
+    t.add_css_class("nvgui-nav-title")
+    t.set_xalign(0)
+    top.append(t)
+
+    # Spacer pushes extra widgets to the right
+    spacer = Gtk.Box()
+    spacer.set_hexpand(True)
+    top.append(spacer)
+
+    if extra_widgets:
+        for w in extra_widgets:
+            top.append(w)
+
+    container.append(top)
+
+    # Thin hairline divider under header
+    div = Gtk.Box()
+    div.add_css_class("nvgui-header-divider")
+    container.append(div)
+
+    return container
 
 
 def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
@@ -118,6 +165,22 @@ def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
     box.append(child)
     sw.set_child(box)
     return sw
+
+
+def _metric_tile(title: str) -> tuple[Gtk.Box, Gtk.Label]:
+    """Return (tile, value_label) for dashboard telemetry grid."""
+    tile = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    tile.add_css_class("nvgui-metric-tile")
+
+    t = Gtk.Label(label=title.upper(), xalign=0.5)
+    t.add_css_class("nvgui-metric-title")
+    tile.append(t)
+
+    v = Gtk.Label(label="—", xalign=0.5)
+    v.add_css_class("nvgui-metric-value")
+    tile.append(v)
+
+    return tile, v
 
 
 # ---------------------------------------------------------------------------
@@ -184,26 +247,48 @@ class DashboardView:
         self.uc = uc
         self._root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         self._graph = StatGraph(label="GPU Utilization %")
-        self._fields: dict[str, TextRow] = {}
+        self._fields: dict[str, Gtk.Widget] = {}
         self._build()
 
     def _build(self) -> None:
-        title = Gtk.Label(label="Dashboard")
-        title.add_css_class("nvgui-nav-title")
-        title.set_xalign(0)
-        self._root.append(title)
+        self._root.append(_page_header("Dashboard"))
 
+        # System Specifications (Full width specs)
+        spec_card, spec_body = _card("System Specifications")
+        self._fields["gpu"] = TextRow("GPU")
+        self._fields["driver"] = TextRow("Driver")
+        spec_body.append(self._fields["gpu"])
+        spec_body.append(self._fields["driver"])
+        self._root.append(spec_card)
+
+        # Live Telemetry Card with Grid
         card, body = _card("Live Telemetry",
                            "Polled from nvidia-smi on a background thread.")
         body.append(self._graph)
-        for key, label in [
-            ("gpu", "GPU"), ("driver", "Driver"), ("temp", "Temperature"),
-            ("util", "GPU Util"), ("power", "Power"), ("clocks", "Clocks"),
-            ("mem", "Memory"), ("fan", "Fan"),
-        ]:
-            r = TextRow(label)
-            body.append(r)
-            self._fields[key] = r
+
+        # 3x2 Telemetry Grid
+        grid = Gtk.Grid()
+        grid.set_row_spacing(10)
+        grid.set_column_spacing(10)
+        grid.set_row_homogeneous(True)
+        grid.set_column_homogeneous(True)
+        grid.set_margin_top(14)
+
+        temp_tile, self._fields["temp_lbl"] = _metric_tile("Temperature")
+        util_tile, self._fields["util_lbl"] = _metric_tile("GPU Util")
+        power_tile, self._fields["power_lbl"] = _metric_tile("Power Draw")
+        clocks_tile, self._fields["clocks_lbl"] = _metric_tile("Core Clocks")
+        mem_tile, self._fields["mem_lbl"] = _metric_tile("VRAM Memory")
+        fan_tile, self._fields["fan_lbl"] = _metric_tile("Fan Speed")
+
+        grid.attach(temp_tile, 0, 0, 1, 1)
+        grid.attach(util_tile, 1, 0, 1, 1)
+        grid.attach(power_tile, 2, 0, 1, 1)
+        grid.attach(clocks_tile, 0, 1, 1, 1)
+        grid.attach(mem_tile, 1, 1, 1, 1)
+        grid.attach(fan_tile, 2, 1, 1, 1)
+
+        body.append(grid)
         self._root.append(card)
 
         # quick actions — fetch Streamline from GitHub (no local SDK needed)
@@ -233,23 +318,80 @@ class DashboardView:
     def update(self, snap) -> None:
         """Called from the main loop with a fresh GpuSnapshot."""
         self._graph.push(_fnum(snap.gpu_util_pct))
-        self._fields["gpu"].set_value(
-            f"{snap.gpu_name}" if snap.gpu_name else "—")
-        self._fields["driver"].set_value(
-            f"{snap.driver_version} (open module)" if snap.driver_version else "—")
-        self._fields["temp"].set_value(
-            (snap.temperature_c + " °C") if snap.temperature_c else "—",
-        )
-        self._fields["util"].set_value(
-            (snap.gpu_util_pct + " %") if snap.gpu_util_pct else "—")
-        self._fields["power"].set_value(
-            f"{snap.power_draw_w} / {snap.power_limit_w} W")
-        self._fields["clocks"].set_value(
-            f"{snap.gr_clock_mhz} / {snap.mem_clock_mhz} MHz")
-        self._fields["mem"].set_value(
-            f"{snap.mem_used_mb} / {snap.mem_total_mb} MiB")
-        self._fields["fan"].set_value(
-            (snap.fan_pct + " %") if snap.fan_pct else "n/a (auto)")
+        
+        # System Spec Fields
+        self._fields["gpu"].set_value(f"{snap.gpu_name}" if snap.gpu_name else "—")
+        self._fields["driver"].set_value(f"{snap.driver_version} (open module)" if snap.driver_version else "—")
+        
+        # 1. Temperature with threshold colors
+        temp_val = "—"
+        if snap.temperature_c:
+            temp_val = f"{snap.temperature_c} °C"
+            try:
+                t_num = float(snap.temperature_c.replace("°C", "").strip())
+                self._fields["temp_lbl"].remove_css_class("warning")
+                self._fields["temp_lbl"].remove_css_class("critical")
+                if t_num >= 83:
+                    self._fields["temp_lbl"].add_css_class("critical")
+                elif t_num >= 78:
+                    self._fields["temp_lbl"].add_css_class("warning")
+            except (ValueError, TypeError, IndexError, AttributeError):
+                pass
+        self._fields["temp_lbl"].set_text(temp_val)
+        
+        # 2. GPU Util with active highlighting
+        util_val = "—"
+        if snap.gpu_util_pct:
+            util_val = f"{snap.gpu_util_pct} %"
+            try:
+                u_num = float(snap.gpu_util_pct.replace("%", "").strip())
+                self._fields["util_lbl"].remove_css_class("warning")
+                if u_num >= 90:
+                    self._fields["util_lbl"].add_css_class("warning")
+            except (ValueError, TypeError, IndexError, AttributeError):
+                pass
+        self._fields["util_lbl"].set_text(util_val)
+        
+        # 3. Power Draw
+        p_val = "—"
+        if snap.power_draw_w:
+            if snap.power_limit_w:
+                p_val = f"{snap.power_draw_w} / {snap.power_limit_w} W"
+                try:
+                    p_draw = float(snap.power_draw_w)
+                    p_limit = float(snap.power_limit_w)
+                    self._fields["power_lbl"].remove_css_class("warning")
+                    if p_draw >= p_limit * 0.9:
+                        self._fields["power_lbl"].add_css_class("warning")
+                except (ValueError, TypeError):
+                    pass
+            else:
+                p_val = f"{snap.power_draw_w} W"
+        self._fields["power_lbl"].set_text(p_val)
+        
+        # 4. Core Clocks
+        clocks_val = "—"
+        if snap.gr_clock_mhz and snap.mem_clock_mhz:
+            clocks_val = f"{snap.gr_clock_mhz} / {snap.mem_clock_mhz} MHz"
+        self._fields["clocks_lbl"].set_text(clocks_val)
+        
+        # 5. VRAM Memory
+        mem_val = "—"
+        if snap.mem_used_mb and snap.mem_total_mb:
+            mem_val = f"{snap.mem_used_mb} / {snap.mem_total_mb} MiB"
+            try:
+                m_used = float(snap.mem_used_mb)
+                m_total = float(snap.mem_total_mb)
+                self._fields["mem_lbl"].remove_css_class("warning")
+                if m_used >= m_total * 0.9:
+                    self._fields["mem_lbl"].add_css_class("warning")
+            except (ValueError, TypeError):
+                pass
+        self._fields["mem_lbl"].set_text(mem_val)
+        
+        # 6. Fan Speed
+        fan_val = snap.fan_pct + " %" if snap.fan_pct else "Auto"
+        self._fields["fan_lbl"].set_text(fan_val)
 
 
 # ===========================================================================
@@ -285,25 +427,21 @@ class GamesView:
 
     def _build(self) -> None:
         # A real Gtk.Paned replaces the old homogeneous Gtk.Box: the divider is
-        # draggable and there is NO 280px hard floor - the list's minimum is its
-        # content's natural size, so a narrow/tiled window no longer blocks the
-        # resize. Paned draws its own handle, so the manual Gtk.Separator is gone.
+        # draggable and there is NO hard floor - the list minimum is set below.
+        # Paned draws its own handle, so the manual Gtk.Separator is gone.
         self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         self._paned.set_shrink_start_child(False)
         self._paned.set_shrink_end_child(False)
         self._list_deb = Debouncer(400)
-        # left: list
+        # left: list column — 330px minimum so game names + badges never squish
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        hdr = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        t = Gtk.Label(label="Games"); t.add_css_class("nvgui-nav-title"); t.set_xalign(0)
-        t.set_hexpand(True)
+        left.set_size_request(330, -1)
         scan = Gtk.Button(label="Scan")
-        scan.add_css_class("nvgui-btn-primary")
+        scan.add_css_class("nvgui-btn-ghost")
         scan.set_tooltip_text("Re-scan the Steam library for installed games")
         scan.connect("clicked", lambda _b: self.refresh())
         self._scan_btn = scan
-        hdr.append(t); hdr.append(scan)
-        left.append(hdr)
+        left.append(_page_header("Games", extra_widgets=[scan]))
         # Search entry for filtering the games list
         self._search_entry = Gtk.SearchEntry()
         self._search_entry.set_placeholder_text("Filter games…")
@@ -312,17 +450,34 @@ class GamesView:
         left.append(self._search_entry)
         # Store the full list for filtering
         self._filter_model: Gtk.FilterListModel | None = None
-        sw = Gtk.ScrolledWindow(); sw.set_vexpand(True); sw.set_child(self._listbox)
+        sw = Gtk.ScrolledWindow()
+        sw.set_vexpand(True)
+        sw.set_child(self._listbox)
         left.append(sw)
-        # right: detail
-        rsw = Gtk.ScrolledWindow(); rsw.set_vexpand(True)
+        # right: detail panel — scrollable; inner box capped at 780px so controls
+        # and their labels stay close even on ultrawide monitors.
+        rsw = Gtk.ScrolledWindow()
+        rsw.set_vexpand(True)
+        rsw.set_hexpand(True)
         rpad = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        rpad.set_margin_start(20); rpad.set_margin_end(20); rpad.set_margin_top(20)
-        rpad.append(self._detail)
+        rpad.set_margin_start(20)
+        rpad.set_margin_end(20)
+        rpad.set_margin_top(20)
+        rpad.set_margin_bottom(20)
+        self._detail.set_size_request(-1, -1)   # let it grow naturally
+        self._detail.set_hexpand(True)
+        rpad.set_halign(Gtk.Align.FILL)
+        # Constrain the inner content to a readable max width
+        inner_clamp = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        inner_clamp.set_halign(Gtk.Align.START)
+        inner_clamp.set_size_request(0, -1)
+        inner_clamp.set_hexpand(True)
+        inner_clamp.append(self._detail)
+        rpad.append(inner_clamp)
         rsw.set_child(rpad)
         self._paned.set_start_child(left)
         self._paned.set_end_child(rsw)
-        self._paned.set_position(self.uc.setting("games.list_width", 300))
+        self._paned.set_position(self.uc.setting("games.list_width", 340))
         self._paned.connect("notify::position", self._on_list_paned_position)
         self._root = self._paned
         self._listbox.connect("row-selected", self._on_select)
@@ -355,7 +510,7 @@ class GamesView:
         )
         detrow = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         detb = Gtk.Button(label="Detect features")
-        detb.add_css_class("nvgui-btn-ghost")
+        detb.add_css_class("nvgui-btn-primary")
         detb.connect("clicked", self._on_detect)
         self._det_label = Gtk.Label(label="")
         self._det_label.add_css_class("nvgui-muted")
@@ -580,12 +735,17 @@ class GamesView:
         """Populate the listbox with *items* (subset or full list)."""
         self._listbox.remove_all()
         for g in items:
-            row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-            row.set_margin_start(10); row.set_margin_end(10)
-            row.set_margin_top(8); row.set_margin_bottom(8)
+            row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+            row.set_margin_start(12)
+            row.set_margin_end(12)
+            row.set_margin_top(11)    # generous vertical padding for interactive feel
+            row.set_margin_bottom(11)
+            row.add_css_class("nvgui-list-row")
             # top line: name + saved-profile badge (if any)
-            top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-            nm = Gtk.Label(label=g.name, xalign=0); nm.add_css_class("nvgui-row-label")
+            top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            nm = Gtk.Label(label=g.name, xalign=0)
+            nm.add_css_class("nvgui-row-label")
+            nm.set_hexpand(True)
             top_row.append(nm)
             # saved-profile badge
             if self.uc.has_profile(g.appid):
@@ -593,8 +753,7 @@ class GamesView:
                 badge.set_halign(Gtk.Align.END)
                 top_row.append(badge)
             row.append(top_row)
-            meta = Gtk.Label(label=f"{g.appid} · {g.installdir}",
-                             xalign=0)
+            meta = Gtk.Label(label=f"{g.appid} · {g.installdir}", xalign=0)
             meta.add_css_class("nvgui-card-subtle")
             row.append(meta)
             # stash original index for selection lookup
@@ -686,10 +845,7 @@ class GamesView:
         # ---- DLSS ----
         c, b = _card("DLSS",
                      "DLSS-SR preset + Frame Generation, via the dxvk-nvapi DRS overrides.")
-        plbl = Gtk.Label(label="DLSS-SR preset · "
-                              "DXVK_NVAPI_DRS_NGX_DLSS_SR_OVERRIDE_RENDER_PRESET_SELECTION")
-        plbl.add_css_class("nvgui-card-subtle"); plbl.set_xalign(0); plbl.set_wrap(True)
-        b.append(plbl)
+        
         dropdown = Gtk.DropDown.new_from_strings(_PRESET_LABELS)
         cur = p.dlss_preset or DlssPreset.DISABLED
         try:
@@ -697,63 +853,56 @@ class GamesView:
         except ValueError:
             dropdown.set_selected(0)
         self._ed["preset"] = dropdown
-        b.append(dropdown)
+        
+        preset_row = _dropdown_row("DLSS-SR preset", "DXVK_NVAPI_DRS_NGX_DLSS_SR_OVERRIDE_RENDER_PRESET_SELECTION", dropdown)
+        b.append(preset_row)
+        
         # DLSS-SR is game-specific: gate the preset dropdown by the dlss_sr
         # capability (only the dropdown — FG below has its own dlss_fg gate).
-        self._gate(game, "dlss_sr", [self._ed["preset"]], b)
+        self._gate(game, "dlss_sr", [preset_row], b)
+        
         fg_row = toggle("fg", "DLSS-G Frame Generation",
                         "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE=on", p.enable_dlss_fg)
         b.append(fg_row)
 
-        fg_preset_lbl = Gtk.Label(label="DLSS-G Preset · "
-                                        "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION")
-        fg_preset_lbl.add_css_class("nvgui-card-subtle"); fg_preset_lbl.set_xalign(0); fg_preset_lbl.set_wrap(True)
-        b.append(fg_preset_lbl)
         fg_preset_dd = Gtk.DropDown.new_from_strings(_FG_PRESET_LABELS)
         try:
             fg_preset_dd.set_selected(_FG_PRESET_VALUES.index(p.dlss_fg_preset or "default"))
         except ValueError:
             fg_preset_dd.set_selected(0)
         self._ed["fg_preset"] = fg_preset_dd
-        b.append(fg_preset_dd)
+        fg_preset_row = _dropdown_row("DLSS-G Preset", "DXVK_NVAPI_DRS_NGX_DLSS_FG_OVERRIDE_RENDER_PRESET_SELECTION", fg_preset_dd)
+        b.append(fg_preset_row)
 
-        fg_mode_lbl = Gtk.Label(label="DLSS-G Mode · DXVK_NVAPI_DRS_NGX_DLSSG_MODE")
-        fg_mode_lbl.add_css_class("nvgui-card-subtle"); fg_mode_lbl.set_xalign(0); fg_mode_lbl.set_wrap(True)
-        b.append(fg_mode_lbl)
         fg_mode_dd = Gtk.DropDown.new_from_strings(_FG_MODE_LABELS)
         try:
             fg_mode_dd.set_selected(_FG_MODE_VALUES.index(p.dlss_fg_mode or "default"))
         except ValueError:
             fg_mode_dd.set_selected(0)
         self._ed["fg_mode"] = fg_mode_dd
-        b.append(fg_mode_dd)
+        fg_mode_row = _dropdown_row("DLSS-G Mode", "DXVK_NVAPI_DRS_NGX_DLSSG_MODE", fg_mode_dd)
+        b.append(fg_mode_row)
 
-        fg_multi_lbl = Gtk.Label(label="DLSS-G Multiplier · DXVK_NVAPI_DRS_NGX_DLSSG_MULTI_FRAME_COUNT")
-        fg_multi_lbl.add_css_class("nvgui-card-subtle"); fg_multi_lbl.set_xalign(0); fg_multi_lbl.set_wrap(True)
-        b.append(fg_multi_lbl)
         fg_multi_dd = Gtk.DropDown.new_from_strings(_FG_MULTIPLIER_LABELS)
         try:
             fg_multi_dd.set_selected(_FG_MULTIPLIER_VALUES.index(p.dlss_fg_multiplier or 0))
         except ValueError:
             fg_multi_dd.set_selected(0)
         self._ed["fg_multiplier"] = fg_multi_dd
-        b.append(fg_multi_dd)
+        fg_multi_row = _dropdown_row("DLSS-G Multiplier", "DXVK_NVAPI_DRS_NGX_DLSSG_MULTI_FRAME_COUNT", fg_multi_dd)
+        b.append(fg_multi_row)
 
         def _update_fg_sub_sensitivity(active):
-            fg_preset_dd.set_sensitive(active)
-            fg_mode_dd.set_sensitive(active)
-            fg_multi_dd.set_sensitive(active)
-            fg_preset_lbl.set_sensitive(active)
-            fg_mode_lbl.set_sensitive(active)
-            fg_multi_lbl.set_sensitive(active)
+            fg_preset_row.set_sensitive(active)
+            fg_mode_row.set_sensitive(active)
+            fg_multi_row.set_sensitive(active)
 
         _update_fg_sub_sensitivity(p.enable_dlss_fg)
         fg_row.connect("toggled", lambda _row, active: _update_fg_sub_sensitivity(active))
 
         # Frame Generation is game-specific: gate by the dlss_fg capability.
         self._gate(game, "dlss_fg", [
-            self._ed["fg"], fg_preset_dd, fg_mode_dd, fg_multi_dd,
-            fg_preset_lbl, fg_mode_lbl, fg_multi_lbl
+            self._ed["fg"], fg_preset_row, fg_mode_row, fg_multi_row
         ], b)
         self._detail.append(c)
 
@@ -1113,8 +1262,7 @@ class GraphicsView:
         self._build()
 
     def _build(self) -> None:
-        title = Gtk.Label(label="Graphics"); title.add_css_class("nvgui-nav-title")
-        title.set_xalign(0); self._root.append(title)
+        self._root.append(_page_header("Graphics"))
 
         c, b = _card("Global driver settings",
                      "Written to /etc/modprobe.d/nvidia-gui.conf. Applied at next boot "
@@ -1267,8 +1415,7 @@ class DisplayView:
         self._build()
 
     def _build(self) -> None:
-        title = Gtk.Label(label="Display"); title.add_css_class("nvgui-nav-title")
-        title.set_xalign(0); self._root.append(title)
+        self._root.append(_page_header("Display"))
 
         info = self.uc.display_info()
         c, b = _card("Display server",
@@ -1313,11 +1460,15 @@ class DisplayView:
                     scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, -1024, 1023, 1)
                     scale.set_value(saved_values[i])
                     scale.set_size_request(200, -1)
-                    scale.set_draw_value(True)
-                    scale.set_value_pos(Gtk.PositionType.RIGHT)
+                    scale.set_draw_value(False)
 
-                    def _on_vibrance_changed(s, idx=i, disps=displays):
+                    value_lbl = Gtk.Label(label=f"{saved_values[i]}", xalign=1)
+                    value_lbl.set_size_request(60, -1)
+                    value_lbl.add_css_class("nvgui-scale-value")
+
+                    def _on_vibrance_changed(s, idx=i, disps=displays, lbl=value_lbl):
                         val = int(s.get_value())
+                        lbl.set_text(f"{val}")
                         current_vals = self.uc.setting("vibrance.values", [])
                         if len(current_vals) < len(disps):
                             current_vals = (current_vals + [0] * len(disps))[:len(disps)]
@@ -1327,6 +1478,7 @@ class DisplayView:
 
                     scale.connect("value-changed", _on_vibrance_changed)
                     row.append(scale)
+                    row.append(value_lbl)
                     vb.append(row)
 
                 if not has_connected:
@@ -1381,9 +1533,13 @@ class DisplayView:
                     b_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.1, 3.0, 0.05)
                     b_scale.set_value(saved_b)
                     b_scale.set_size_request(200, -1)
-                    b_scale.set_draw_value(True)
-                    b_scale.set_value_pos(Gtk.PositionType.RIGHT)
+                    b_scale.set_draw_value(False)
                     b_row.append(b_scale)
+
+                    b_lbl = Gtk.Label(label=f"{saved_b:.2f}", xalign=1)
+                    b_lbl.set_size_request(60, -1)
+                    b_lbl.add_css_class("nvgui-scale-value")
+                    b_row.append(b_lbl)
 
                     # Contrast
                     c_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
@@ -1394,13 +1550,21 @@ class DisplayView:
                     c_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.1, 3.0, 0.05)
                     c_scale.set_value(saved_c)
                     c_scale.set_size_request(200, -1)
-                    c_scale.set_draw_value(True)
-                    c_scale.set_value_pos(Gtk.PositionType.RIGHT)
+                    c_scale.set_draw_value(False)
                     c_row.append(c_scale)
 
-                    def _on_color_changed(s, cid=conn_id, bs=b_scale, cs=c_scale):
+                    c_lbl = Gtk.Label(label=f"{saved_c:.2f}", xalign=1)
+                    c_lbl.set_size_request(60, -1)
+                    c_lbl.add_css_class("nvgui-scale-value")
+                    c_row.append(c_lbl)
+
+                    def _on_color_changed(s, cid=conn_id, bs=b_scale, cs=c_scale, bl=b_lbl, cl=c_lbl):
                         b_val = float(bs.get_value())
                         c_val = float(cs.get_value())
+                        bl.set_text(f"{b_val:.2f}")
+                        cl.set_text(f"{c_val:.2f}")
+                        self.uc.set_setting(f"color.{cid}.brightness", b_val)
+                        self.uc.set_setting(f"color.{cid}.contrast", c_val)
                         self._color_deb.schedule(lambda: self.uc.set_color(cid, b_val, c_val))
 
                     b_scale.connect("value-changed", _on_color_changed)
@@ -1438,8 +1602,7 @@ class DriversView:
         self._build()
 
     def _build(self) -> None:
-        title = Gtk.Label(label="Drivers"); title.add_css_class("nvgui-nav-title")
-        title.set_xalign(0); self._root.append(title)
+        self._root.append(_page_header("Drivers"))
         info = self.uc.driver_info()
         snap = self.uc.snapshot()
         c, b = _card("Driver & module")
@@ -1506,8 +1669,7 @@ class RtxView:
         self._build()
 
     def _build(self) -> None:
-        title = Gtk.Label(label="RTX"); title.add_css_class("nvgui-nav-title")
-        title.set_xalign(0); self._root.append(title)
+        self._root.append(_page_header("RTX"))
 
         # DLSS cache glance — the canonical cached-version surface lives on
         # the DLSS page (single home). Here we show a one-line count + a
@@ -1547,13 +1709,34 @@ class RtxView:
         ]
         
         for feat, pill_text, is_on, note in features_data:
-            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            n = Gtk.Label(label=feat); n.add_css_class("nvgui-row-label"); n.set_hexpand(True)
-            row.append(n)
-            row.append(pill(pill_text, on=is_on))
-            b2.append(row)
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+            
+            # Left column: Title
+            title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            title_box.set_size_request(200, -1)
+            n = Gtk.Label(label=feat, xalign=0)
+            n.add_css_class("nvgui-row-label")
+            title_box.append(n)
+            row.append(title_box)
+            
+            # Middle column: Description
+            desc_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            desc_box.set_hexpand(True)
             desc = Gtk.Label(label=note, xalign=0, wrap=True)
-            desc.add_css_class("nvgui-card-subtle"); b2.append(desc)
+            desc.add_css_class("nvgui-card-subtle")
+            desc_box.append(desc)
+            row.append(desc_box)
+            
+            # Right column: Badge
+            badge_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            badge_box.set_size_request(160, -1)
+            p = pill(pill_text, on=is_on)
+            p.set_halign(Gtk.Align.START)
+            p.set_valign(Gtk.Align.START)
+            badge_box.append(p)
+            row.append(badge_box)
+            
+            b2.append(row)
         self._root.append(c2)
 
     def _on_open_dlss(self, _b) -> None:
@@ -1581,8 +1764,7 @@ class ProfilesView:
         self._build()
 
     def _build(self) -> None:
-        title = Gtk.Label(label="Profiles"); title.add_css_class("nvgui-nav-title")
-        title.set_xalign(0); self._root.append(title)
+        self._root.append(_page_header("Profiles"))
 
         gs = self.uc.get_global_settings()
         c, b = _card("Global driver profile")

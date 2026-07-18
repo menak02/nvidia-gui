@@ -54,17 +54,47 @@ def _card(title: str, subtitle: str | None = None) -> tuple[Gtk.Box, Gtk.Box]:
     t.add_css_class("nvgui-card-title")
     t.set_hexpand(True)
     head.append(t)
-    dot = Gtk.Box()
-    dot.add_css_class("nvgui-corner")
-    head.append(dot)
+    # No corner badge — card titles are clean text only
     card.append(head)
     if subtitle:
         s = Gtk.Label(label=subtitle, xalign=0, wrap=True)
         s.add_css_class("nvgui-card-subtle")
         card.append(s)
-    body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
     card.append(body)
     return card, body
+
+
+def _page_header(title_text: str, extra_widgets: list[Gtk.Widget] | None = None) -> Gtk.Box:
+    """Return a styled page header box with title and spacer row for extra widgets."""
+    container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    container.set_margin_bottom(12)
+
+    top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    top.set_valign(Gtk.Align.CENTER)
+
+    t = Gtk.Label(label=title_text)
+    t.add_css_class("nvgui-nav-title")
+    t.set_xalign(0)
+    top.append(t)
+
+    # Spacer pushes extra widgets to the right
+    spacer = Gtk.Box()
+    spacer.set_hexpand(True)
+    top.append(spacer)
+
+    if extra_widgets:
+        for w in extra_widgets:
+            top.append(w)
+
+    container.append(top)
+
+    # Thin hairline divider under header
+    div = Gtk.Box()
+    div.add_css_class("nvgui-header-divider")
+    container.append(div)
+
+    return container
 
 
 def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
@@ -109,10 +139,7 @@ def build_dlss_view(uc: "UseCases",
     """
     column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
 
-    title = Gtk.Label(label="DLSS")
-    title.add_css_class("nvgui-nav-title")
-    title.set_xalign(0)
-    column.append(title)
+    column.append(_page_header("DLSS"))
 
     intro = Gtk.Label(
         label="Streamline cache, the canonical download, and per-game DLSS DLL swap."
@@ -317,8 +344,31 @@ def build_dlss_view(uc: "UseCases",
             hint.set_xalign(0)
             swap_status_box.append(hint)
             return
+
+        # Compact badge-based status list — max 350px wide so keys and values
+        # sit together rather than pinning to opposite window edges.
+        status_list = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        status_list.set_halign(Gtk.Align.START)
+        status_list.set_size_request(350, -1)
         for kind, st in status.items():
-            swap_status_box.append(TextRow(f"{kind}", st, accent=(st == "backed-up")))
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+            key_lbl = Gtk.Label(label=kind, xalign=0)
+            key_lbl.add_css_class("nvgui-row-label")
+            key_lbl.set_size_request(130, -1)
+
+            # Choose badge style based on status value
+            badge_lbl = Gtk.Label(label=st)
+            if st == "backed-up":
+                badge_lbl.add_css_class("nvgui-status-badge-ok")
+            elif st == "missing":
+                badge_lbl.add_css_class("nvgui-status-badge-warn")
+            else:
+                badge_lbl.add_css_class("nvgui-status-badge")
+
+            row.append(key_lbl)
+            row.append(badge_lbl)
+            status_list.append(row)
+        swap_status_box.append(status_list)
 
     def refresh_all() -> None:
         """Re-read the cache once and refresh the list, the swap dropdown, and

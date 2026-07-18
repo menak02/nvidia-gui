@@ -1,157 +1,215 @@
 /*
  * NVIDIA-GUI -- GTK4 base theme (NVIDIA brand, Wayland-crash-safe).
- * DESIGN PRINCIPLE: solid colours, 2px angular radii, hairline borders, one
- * green accent. NO gradients, NO blur, NO shadows, NO translucent overlays --
- * these trigger NVIDIA compositor stalls on Wayland, and NVIDIA's own design
- * language doesn't need them anyway. This file is the STATIC layer only; every
- * motion rule lives in styles-effects.css (gated by the nvgui-motion-* tier
- * class) so a single class swap re-scopes all effects with no theme reload.
+ *
+ * DESIGN SYSTEM (v2 — Clean Modern Dashboard):
+ *   Background layers: window #080808 → sidebar #0d0d0d → card #141414 → tile #1c1c1c
+ *   Typography tiers:
+ *     Tier 1 — Card titles:   700 weight, 0.95rem, #ffffff
+ *     Tier 2 — Setting labels: 600 weight, 0.875rem, #d4d4d4
+ *     Tier 3 — Helper text:    400 weight, 0.8rem,   #888888 (WCAG AA on #141414 ✓)
+ *   Accent green (#76b900) reserved for FUNCTIONAL states only:
+ *     active toggles, live graphs, "on" badges, active nav highlight.
+ *     NOT used for structural borders or static header lines.
+ *   Border-radius: 8px cards, 6px controls, 20px pill badges.
+ *
+ * WAYLAND SAFETY: solid colours only. NO gradients, NO box-shadow, NO blur,
+ * NO translucent overlays. Motion rules live in styles-effects.css, gated by
+ * nvgui-motion-{full|minimal|off}.
  */
 
 /* =========================================================== Global */
 window {
-    background-color: #000000;
+    background-color: #080808;
 }
 
 * {
-    color: #f2f2f2;
+    color: #e8e8e8;
     font-family: "NVIDIA Sans", Inter, "Helvetica Neue", Roboto, sans-serif;
     font-size: 14px;
     background: transparent;
+    box-sizing: border-box;  /* padding lives inside declared widths, never causes overflow */
+    word-wrap: break-word;
 }
+
+/* ================================================================ Typography / Code */
+.nvgui-mono {
+    font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "GeistMono Nerd Font", monospace;
+    font-feature-settings: "liga" 0;
+}
+
+.nvgui-env-var {
+    color: #666666;
+    font-size: 0.72rem;
+    font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "GeistMono Nerd Font", monospace;
+    font-weight: 500;
+}
+
 
 /* =========================================================== Sidebar */
 .nvgui-sidebar {
-    background-color: #0b0b0b;
-    border-right: 1px solid #262626;
-    padding: 18px 10px;
+    background-color: #0d0d0d;
+    border-right: 1px solid #1c1c1c;
+    padding: 16px 20px;
 }
 
+/* Brand wordmark — green is identity, not a structural border */
 .nvgui-nav-title {
     color: #76b900;
-    font-size: 1.4rem;
+    font-size: 1.2rem;
     font-weight: 800;
-    letter-spacing: 1px;
-    padding: 4px 10px 14px 10px;
+    letter-spacing: 0.5px;
+    padding: 4px 12px 16px 12px;
 }
 
 .nvgui-nav-subtitle {
-    color: #8a8a8a;
-    font-size: 0.82rem;
-    padding: 0 10px 16px 10px;
+    color: #666666;
+    font-size: 0.78rem;
+    padding: 0 12px 16px 12px;
 }
 
 .nvgui-nav-btn {
     background: transparent;
     border: none;
-    border-radius: 2px;
-    padding: 11px 14px;
-    color: #c8c8c8;
-    font-weight: 600;
+    border-radius: 6px;
+    padding: 10px 14px;
+    color: #888888;
+    font-weight: 500;
+    font-size: 0.875rem;
     border-left: 3px solid transparent;
+    transition: background 0.15s ease-out, color 0.15s ease-out;
 }
 
 .nvgui-nav-btn:hover {
-    background: #161616;
-    color: #ffffff;
+    background: rgba(255, 255, 255, 0.04);
+    color: #e0e0e0;
 }
 
 .nvgui-nav-btn.active {
     background: #1a1a1a;
     color: #ffffff;
-    border-left: 3px solid #76b900;
+    font-weight: 600;
+    border-left: 3px solid #76b900;   /* green = active functional state */
 }
 
-/* =========================================================== Cards */
+/* =========================================================== Cards
+ * Cards are elevated above the main window (#080808) using a distinct
+ * background (#141414) — no border needed, colour delta provides separation.
+ * 8px radius softens the layout. 24px padding gives content room to breathe.
+ * No neon-green structural left border: green is reserved for live/active states. */
 .nvgui-card {
     background: #141414;
-    border: 1px solid #262626;
-    border-radius: 2px;
-    padding: 18px;
-    margin: 10px 0;
+    border: none;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
 }
 
+/* Tier 1 typography: Card title — bold, white, readable at a glance */
 .nvgui-card-title {
     color: #ffffff;
-    font-size: 1.05rem;
+    font-size: 0.95rem;
     font-weight: 700;
-    margin-bottom: 8px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid #1f1f1f;
+    margin-bottom: 12px;   /* 12px gap between title and description/first row */
+    padding-bottom: 0;
+    border-bottom: none;
 }
 
+/* Tier 3 typography: helper/description text — WCAG AA contrast on #141414 */
 .nvgui-card-subtle {
-    color: #9a9a9a;
-    font-size: 0.84rem;
-    margin-bottom: 10px;
+    color: #888888;   /* contrast ratio ≈ 4.6:1 on #141414 ✓ */
+    font-size: 0.8rem;
+    font-weight: 400;
+    margin-bottom: 14px;
+    line-height: 1.5;
 }
 
-/* The NVIDIA signature: a solid 11px green square at a card's corner. Pure
- * CSS box, no filter/gradient. Drawn by .corner-accent in a toolbar row. */
+/* Card header row: light rule separates title area from body */
+.nvgui-card-header {
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid #1e1e1e;
+}
+
+/* NVIDIA signature badge — retained as small identity mark */
 .nvgui-corner {
     background: #76b900;
-    min-width: 11px;
-    min-height: 11px;
-    border-radius: 2px;
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 4px;
 }
 
-.nvgui-card-header {
-    border-bottom: 1px solid #1f1f1f;
-    padding-bottom: 6px;
-    margin-bottom: 10px;
-}
-
-/* =========================================================== Rows */
+/* ================================================================ Rows & Settings Grid
+ * Each row is a horizontal flex container. Label+description on the left,
+ * control on the right. 12px top/bottom padding gives ~24px gap between rows.
+ * A light bottom border separates rows softly.
+ * Last row has no border so cards don't look heavy at the bottom. */
 .nvgui-row {
-    padding: 7px 0;
+    padding: 12px 0;
+    border-bottom: 1px solid #1c1c1c;
 }
 
+.nvgui-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+/* Tier 2 typography: semi-bold, off-white — clearly readable setting labels */
 .nvgui-row-label {
-    color: #d2d2d2;
+    color: #d4d4d4;
     font-weight: 600;
+    font-size: 0.875rem;
 }
 
+/* Tier 3 typography: regular, muted helper text */
 .nvgui-row-value {
-    color: #9a9a9a;
-    font-size: 0.92rem;
+    color: #888888;
+    font-size: 0.8rem;
+    font-weight: 400;
 }
 
+/* Functional accent: green only when a value represents an active/live state */
 .nvgui-row-value.accent {
-    color: #9ad815;
-    font-weight: 700;
+    color: #76b900;
+    font-weight: 600;
 }
 
-/* =========================================================== Buttons */
+/* =========================================================== Buttons
+ * Unified visual language: dark-grey base, subtle border, 6px radius.
+ * Primary = solid green fill (highest weight). Ghost = bordered. Danger = red tint. */
 button {
-    background: #1c1c1c;
-    border: 1px solid #2e2e2e;
-    border-radius: 2px;
-    padding: 9px 18px;
-    color: #f2f2f2;
-    font-weight: 600;
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    border-radius: 6px;
+    padding: 8px 16px;
+    color: #d4d4d4;
+    font-weight: 500;
+    font-size: 0.875rem;
 }
 
 button:hover {
-    background: #282828;
-    border-color: #76b900;
+    background: #252525;
+    border-color: #3a3a3a;
     color: #ffffff;
 }
 
 button:active {
-    background: #111;
+    background: #181818;
+    border-color: #2e2e2e;
 }
 
 button:disabled {
-    background: #121212;
-    color: #7a7a7a;
+    background: #141414;
+    color: #444444;
     border-color: #1e1e1e;
 }
 
+/* Primary action: solid green, highest visual weight */
 .nvgui-btn-primary {
     background: #76b900;
-    color: #0b0b0b;
+    color: #050505;
     border: none;
     font-weight: 700;
+    border-radius: 6px;
 }
 
 .nvgui-btn-primary:hover {
@@ -159,94 +217,123 @@ button:disabled {
     color: #000000;
 }
 
+.nvgui-btn-primary:active {
+    background: #6aa800;
+}
+
+/* Ghost / secondary: bordered, green accent text */
 .nvgui-btn-ghost {
-    background: transparent;
-    color: #9ad815;
-    border: 1px solid #3a4a1a;
+    background: #111111;
+    color: #76b900;
+    border: 1px solid #2d3d10;
+    border-radius: 6px;
 }
 
 .nvgui-btn-ghost:hover {
-    background: #162012;
-    color: #bdf33b;
+    background: #181e0c;
+    border-color: #76b900;
+    color: #9ad815;
 }
 
+/* Destructive */
 .nvgui-btn-danger {
-    background: transparent;
-    color: #f06a6a;
-    border: 1px solid #4a1f1f;
+    background: #1a0e0e;
+    color: #e05c5c;
+    border: 1px solid #3a1818;
+    border-radius: 6px;
 }
 
 .nvgui-btn-danger:hover {
-    background: #241010;
-    color: #ff8080;
+    background: #220e0e;
+    border-color: #6e2020;
+    color: #ff7070;
 }
 
-/* =========================================================== Switches */
+/* ================================================================ Switches
+ * Pill-shaped toggle that clearly communicates state:
+ *   OFF: dark-grey track (#242424), grey circular thumb (left position)
+ *   ON:  full vibrant green track (#76b900), white circular thumb (right)
+ * Thumb is a white circle for maximum contrast against both states.
+ * The engine handles thumb positioning (left/right) automatically. */
 switch {
-    background: #1d1d1d;
-    border: 1px solid #2e2e2e;
-    border-radius: 2px;
+    background: #242424;
+    border: 1px solid #333333;
+    border-radius: 20px;     /* pill track */
+    min-width: 44px;
+    min-height: 24px;
 }
 
 switch:checked {
-    background: #2c3a12;
-    border-color: #76b900;
+    background: #76b900;     /* full green track when ON */
+    border-color: #6aa800;
 }
 
 switch slider {
-    background: #6a6a6a;
-    border-radius: 2px;
+    background: #888888;     /* grey thumb — OFF state */
+    border-radius: 50%;      /* circular thumb */
+    min-width: 18px;
+    min-height: 18px;
+    margin: 2px;
 }
 
 switch:checked slider {
-    background: #76b900;
+    background: #ffffff;     /* white thumb on green track — crisp ON state */
 }
 
 /* =========================================================== Inputs */
 entry {
-    background: #0e0e0e;
-    border: 1px solid #2e2e2e;
-    border-radius: 2px;
-    padding: 8px 10px;
-    color: #f2f2f2;
+    background: #111111;
+    border: 1px solid #262626;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #e8e8e8;
+    font-size: 0.875rem;
 }
 
 entry:focus {
     border-color: #76b900;
+    background: #141414;
 }
 
 entry:disabled {
-    color: #7a7a7a;
-    background: #121212;
+    color: #444444;
+    background: #0d0d0d;
+    border-color: #1a1a1a;
 }
 
 combobox button.combo {
-    background: #0e0e0e;
-    border: 1px solid #2e2e2e;
-    border-radius: 2px;
+    background: #111111;
+    border: 1px solid #262626;
+    border-radius: 6px;
+    padding: 6px 10px;
+    color: #d4d4d4;
+}
+
+combobox button.combo:hover {
+    border-color: #3a3a3a;
 }
 
 /* =========================================================== Popovers & Dropdown Menus */
 popover {
-    background-color: #141414;
-    border: 1px solid #2e2e2e;
-    border-radius: 2px;
+    background-color: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
 }
 
 popover contents {
-    background-color: #141414;
+    background-color: #1a1a1a;
     padding: 6px;
-    border-radius: 2px;
+    border-radius: 8px;
 }
 
 popover listview {
-    background-color: #141414;
+    background-color: #1a1a1a;
 }
 
 popover listview row {
-    padding: 8px 12px;
-    border-radius: 2px;
-    color: #c8c8c8;
+    padding: 8px 14px;
+    border-radius: 6px;
+    color: #a8a8a8;
     background-color: transparent;
 }
 
@@ -256,18 +343,20 @@ popover listview row:hover {
 }
 
 popover listview row:selected {
-    background-color: #2c3a12;
+    background-color: #1f2e0a;
     color: #ffffff;
 }
 
 menu {
-    background-color: #141414;
-    border: 1px solid #2e2e2e;
+    background-color: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
 }
 
 menuitem {
-    padding: 8px 12px;
-    color: #c8c8c8;
+    padding: 8px 14px;
+    color: #a8a8a8;
+    border-radius: 4px;
 }
 
 menuitem:hover {
@@ -277,67 +366,124 @@ menuitem:hover {
 
 /* =========================================================== Misc */
 separator {
-    background: #1f1f1f;
+    background: #1c1c1c;
     min-height: 1px;
-    margin: 6px 0;
+    margin: 8px 0;
 }
 
 scrollbar {
-    min-width: 8px;
-    min-height: 8px;
+    min-width: 6px;
+    min-height: 6px;
 }
 
 scrollbar slider {
-    background: #2a2a2a;
-    border-radius: 2px;
-    min-width: 8px;
+    background: #262626;
+    border-radius: 3px;
+    min-width: 6px;
 }
 
 scrollbar slider:hover {
-    background: #3a3a3a;
+    background: #333333;
 }
 
+/* Pill badges: rounded, compact. Green = active/on functional state. */
 .nvgui-pill {
-    background: #162012;
-    color: #9ad815;
-    border: 1px solid #2c3a12;
-    border-radius: 2px;
-    padding: 2px 8px;
-    font-size: 0.78rem;
-    font-weight: 700;
+    background: #1a2a08;
+    color: #76b900;
+    border: 1px solid #2a4010;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
 .nvgui-pill.off {
     background: #1a1a1a;
-    color: #8a8a8a;
-    border-color: #2e2e2e;
+    color: #666666;
+    border-color: #282828;
 }
 
 .nvgui-muted {
-    color: #9a9a9a;
+    color: #888888;
+    font-size: 0.8rem;
 }
 
+/* Live indicator dot — green = active/live functional state */
 .nvgui-status-dot {
-    min-width: 9px;
-    min-height: 9px;
-    border-radius: 9px;
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 50%;
     background: #76b900;
 }
 
 .nvgui-status-dot.warn {
-    background: #d6a100;
+    background: #c97e00;
 }
 
 .nvgui-status-dot.off {
-    background: #4a4a4a;
+    background: #333333;
 }
 
+/* Inline status badge for DLSS per-game DLL status rows.
+ * Three variants: neutral (grey), ok (green), warn (dark red for 'missing'). */
+.nvgui-status-badge {
+    background: #1e1e1e;
+    color: #888888;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.nvgui-status-badge-ok {
+    background: #1a2a08;
+    color: #76b900;
+    border: 1px solid #2a4010;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.nvgui-status-badge-warn {
+    background: #2a0e0e;
+    color: #e05c5c;
+    border: 1px solid #4a1818;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+/* Games listbox interactive rows — hover background for list item feel.
+ * GTK4 listbox wraps our child in a 'row' node; target both the child class
+ * and the ancestor listbox row node for hover/selected states. */
+.nvgui-list-row {
+    border-radius: 6px;
+}
+
+listbox row:hover {
+    background: #1a1a1a;
+}
+
+listbox row:selected {
+    background: #1e2e10;  /* subtle green-tinted selection */
+}
+
+listbox row:selected .nvgui-row-label {
+    color: #ffffff;
+}
+
+listbox row:selected .nvgui-card-subtle {
+    color: #76b900;
+}
+
+
 /* =========================================================== Focus + a11y
- * Keyboard focus ring: 2px #76b900 outline, 1px offset, only on
- * :focus-visible (keyboard/Tab nav) so mouse users never see a ring. A solid
- * outline -- NOT box-shadow/filter/blur -- so it stays Wayland-compositor-safe
- * under the no-translucent-overlay contract. The hover/active :focus-visible
- * override drops the ring for mouse users who click a focused control. */
+ * Keyboard focus ring: 2px solid green outline, 2px offset. Solid outline —
+ * NOT box-shadow/filter/blur — stays Wayland-compositor-safe.
+ * :focus-visible = keyboard/Tab only; mouse clicks never show the ring. */
 button:focus-visible,
 switch:focus-visible,
 .nvgui-nav-btn:focus-visible,
@@ -345,7 +491,7 @@ combobox:focus-visible,
 entry:focus-visible,
 .nvgui-pill:focus-visible {
     outline: 2px solid #76b900;
-    outline-offset: 1px;
+    outline-offset: 2px;
 }
 
 button:hover:focus-visible,
@@ -358,62 +504,109 @@ button:active:focus-visible,
  * wrapping a switch the game's detected capability marks unsupported.
  * set_sensitive(False) already disables interaction + GTK dims the switch;
  * this class is the SECONDARY signal that distinguishes "unsupported by this
- * game/hardware" from "off by choice" -- a hairline left bar in muted grey +
- * a desaturated label + a flat (non-green) slider. Solid fills only, no
- * opacity overlays. */
+ * game/hardware" from "off by choice" — a hairline left bar in muted grey +
+ * a desaturated label + a flat (non-green) slider. Solid fills only. */
 .nvgui-toggle-unsupported {
-    border-left: 2px solid #3a3a3a;
-    padding-left: 8px;
+    border-left: 2px solid #2e2e2e;
+    padding-left: 10px;
+    border-radius: 0 4px 4px 0;
 }
 
 .nvgui-toggle-unsupported .nvgui-row-label {
-    color: #8a8a8a;
+    color: #555555;
 }
 
 .nvgui-toggle-unsupported switch slider {
-    background: #4a4a4a;
+    background: #333333;
+}
+
+/* =========================================================== Feature chip buttons
+ * Small action chips inline in the game editor (override / clear).
+ * Ghost-style: dark background, green accent text/border when actionable. */
+.nvgui-feature-chip {
+    background: #111111;
+    border: 1px solid #2a2a2a;
+    border-radius: 20px;
+    padding: 3px 12px;
+    color: #888888;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.nvgui-feature-chip:hover {
+    background: #1a1a1a;
+    border-color: #76b900;
+    color: #9ad815;
 }
 
 /* =========================================================== Save toast
  * The transient confirmation popup mounted at the window bottom (see
  * widgets.SaveToast). The reveal itself is a GTK built-in transition, NOT a
  * CSS opacity/blur — so this node is solid fills only, per the crash-safe
- * contract (no compositor stall on Wayland). The effects file styles the
- * revealer node's own colour-shift timing per motion tier; this block is the
- * visible popup: a green-tinted dark plate with a hairline border, the accent
- * label, and 2px angular radii. A negative bottom margin tucks the toast
- * into the window's lower edge so the slide-up reads as rising from the
- * status strip.
- */
+ * contract (no compositor stall on Wayland). */
 .nvgui-toast {
-    background: #162012;
-    border: 1px solid #2c3a12;
-    border-radius: 2px;
+    background: #141f06;
+    border: 1px solid #2a4010;
+    border-radius: 8px;
     padding: 10px 18px;
     margin: 6px;
     min-width: 200px;
 }
 
 .nvgui-toast-label {
-    color: #bdf33b;
-    font-weight: 700;
+    color: #9ad815;
+    font-weight: 600;
+    font-size: 0.875rem;
 }
 
 /* =========================================================== Status bar
  * A persistent bottom strip (widgets.StatusBar) showing the last
  * action / error / IPC socket path. Solid fills + hairline border per the
- * crash-safe contract: nothing for the compositor to blur or gradient. Sits
- * above the save toast in the window box so it always reserves its line.
- */
+ * crash-safe contract. */
 .nvgui-statusbar {
-    background: #0e0e0e;
-    border-top: 1px solid #232323;
-    padding: 4px 14px;
+    background: #0a0a0a;
+    border-top: 1px solid #1a1a1a;
+    padding: 5px 16px;
 }
 
 .nvgui-status-label {
-    color: #9a9a9a;
-    font-size: 0.82rem;
+    color: #555555;
+    font-size: 0.78rem;
+}
+
+/* =========================================================== Buttons */
+button {
+    min-height: 24px;
+}
+
+.nvgui-btn-primary {
+    background: #1e1e1e;
+    color: #ffffff;
+    border: 1px solid #76b900;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 600;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+
+.nvgui-btn-primary:hover {
+    background: #2a2a2a;
+    border-color: #9ad815;
+}
+
+.nvgui-btn-danger {
+    background: #1e1e1e;
+    color: #ff6666;
+    border: 1px solid #731b1b;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 600;
+    transition: background 150ms ease, border-color 150ms ease;
+}
+
+.nvgui-btn-danger:hover {
+    background: #2a2a2a;
+    border-color: #a32222;
 }
 
 /* =========================================================== Sliders (GtkScale) */
@@ -423,23 +616,23 @@ scale {
 
 scale trough {
     background-color: #1e1e1e;
-    border: 1px solid #2e2e2e;
-    border-radius: 2px;
-    min-height: 6px;
+    border: 1px solid #2a2a2a;
+    border-radius: 4px;
+    min-height: 5px;
 }
 
 scale highlight {
     background-color: #76b900;
-    border-radius: 2px;
+    border-radius: 4px;
 }
 
 scale slider {
     background-color: #76b900;
     border: 1px solid #84d10a;
-    border-radius: 2px; /* Angular 2px radius typical of NVIDIA style */
-    min-width: 14px;
-    min-height: 14px;
-    margin: -5px 0;
+    border-radius: 50%;    /* circular thumb for modern feel */
+    min-width: 16px;
+    min-height: 16px;
+    margin: -6px 0;
 }
 
 scale slider:hover {
@@ -453,15 +646,83 @@ scale slider:active {
 }
 
 scale:disabled trough {
-    background-color: #121212;
-    border-color: #1e1e1e;
+    background-color: #111111;
+    border-color: #1c1c1c;
 }
 
 scale:disabled highlight {
-    background-color: #4a4a4a;
+    background-color: #333333;
 }
 
 scale:disabled slider {
-    background-color: #4a4a4a;
-    border-color: #5a5a5a;
+    background-color: #333333;
+    border-color: #3a3a3a;
+}
+
+.nvgui-scale-value {
+    color: #76b900;
+    font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "GeistMono Nerd Font", monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* =========================================================== Dashboard Telemetry
+ * Tiles elevated one more step: #1c1c1c on #141414 card background.
+ * No neon-green left borders — green is reserved for active/live states.
+ * Title = Tier 3 (muted uppercase label). Value = monospace bold readout. */
+.nvgui-metric-tile {
+    background-color: #1c1c1c;
+    border: none;
+    border-radius: 8px;
+    padding: 20px 16px;
+    transition: all 200ms ease;
+}
+
+.nvgui-metric-title {
+    color: #666666;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.nvgui-metric-value {
+    color: #ffffff;
+    font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "GeistMono Nerd Font", monospace;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    text-align: center;
+}
+
+/* Semantic threshold colours: green = normal live reading */
+.nvgui-metric-value.normal {
+    color: #76b900;
+}
+
+.nvgui-metric-value.warning {
+    color: #c97e00;
+}
+
+.nvgui-metric-value.critical {
+    color: #cc2222;
+}
+
+/* =========================================================== Overrides Highlight
+ * Green left bar = override actively applied (functional state, not structural). */
+.active-override {
+    border-left: 3px solid #76b900;
+    padding-left: 10px;
+    background: #0e150a;
+    border-radius: 0 4px 4px 0;
+}
+
+/* ================================================================ Page Header */
+.nvgui-header-divider {
+    background-color: #1e1e1e;
+    min-height: 1px;
+    margin-bottom: 16px;
+    border-radius: 1px;
 }

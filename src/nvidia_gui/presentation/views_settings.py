@@ -70,6 +70,44 @@ def _card(title: str, subtitle: str = "") -> tuple[Gtk.Box, Gtk.Box]:
     return card, body
 
 
+def _page_header(title_text: str, extra_widgets: list[Gtk.Widget] | None = None) -> Gtk.Box:
+    """Return a styled page header box with title and accent line."""
+    container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    container.set_margin_bottom(12)
+    
+    top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+    top.set_valign(Gtk.Align.CENTER)
+    
+    t = Gtk.Label(label=title_text)
+    t.add_css_class("nvgui-nav-title")
+    t.set_xalign(0)
+    top.append(t)
+    
+    # Tiny signature corner badge
+    badge = Gtk.Box()
+    badge.add_css_class("nvgui-corner")
+    badge.set_valign(Gtk.Align.CENTER)
+    top.append(badge)
+    
+    # Spacer to push extra widgets to the right
+    spacer = Gtk.Box()
+    spacer.set_hexpand(True)
+    top.append(spacer)
+    
+    if extra_widgets:
+        for w in extra_widgets:
+            top.append(w)
+    
+    container.append(top)
+    
+    # 1px hairline divider under header
+    div = Gtk.Box()
+    div.add_css_class("nvgui-header-divider")
+    container.append(div)
+    
+    return container
+
+
 def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
     """Local mirror of ``views._scrolled``: same margins + spacing for parity."""
     sw = Gtk.ScrolledWindow()
@@ -140,6 +178,7 @@ def open_about_dialog(parent: Gtk.Window | None, version: str) -> None:
 
 def build_settings_view(uc: "UseCases",
                         on_anim_changed: Callable[[str], None] | None = None,
+                        on_motion_reduce: Callable[[bool], None] | None = None,
                         ) -> Gtk.Widget:
     """Build the Settings page: animations tier, motion-reduce, and About.
 
@@ -157,11 +196,7 @@ def build_settings_view(uc: "UseCases",
     root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
 
     # ---- page title ------------------------------------------------------
-    title = Gtk.Label(label="Settings")
-    title.add_css_class("nvgui-nav-title")
-    title.set_xalign(0)
-    title.set_halign(Gtk.Align.START)
-    root.append(title)
+    root.append(_page_header("Settings"))
 
     # ---- Animations tier -------------------------------------------------
     anim_card, anim_body = _card(
@@ -216,6 +251,11 @@ def build_settings_view(uc: "UseCases",
 
     def _on_motion_reduce(_row: ToggleRow, active: bool) -> None:
         uc.set_setting("presentation.motion_reduce", bool(active))
+        if on_motion_reduce is not None:
+            try:
+                on_motion_reduce(active)
+            except Exception:  # noqa: BLE001
+                pass
 
     mr_row.connect("toggled", _on_motion_reduce)
     mr_body.append(mr_row)
