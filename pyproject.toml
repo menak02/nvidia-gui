@@ -26,7 +26,10 @@ classifiers = [
 # Zero non-stdlib deps except PyGObject (gi). TOML read uses stdlib tomllib;
 # TOML write uses our own serializer. pynvml/psutil are NOT required — we use
 # nvidia-smi (always present) and stdlib.
-dependencies = ["PyGObject>=3.42"]
+dependencies = [
+    "PyGObject>=3.42",
+    "nvibrant"
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4.0", "ruff>=0.1.0"]
