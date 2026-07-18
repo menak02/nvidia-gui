@@ -65,7 +65,7 @@ window.nvgui-motion-full .nvgui-card:nth-child(8) { animation-delay: 280ms; }
  * The opacity is on a single solid 9px indicator (not an overlay/backdrop),
  * so it stays compositor-cheap. */
 window.nvgui-motion-full .nvgui-status-dot {
-    animation: nvgui-pulse 2200ms ease-in-out infinite;
+    animation: nvgui-pulse 1100ms ease-in-out infinite alternate;
 }
 
 @keyframes nvgui-rise {
@@ -74,8 +74,8 @@ window.nvgui-motion-full .nvgui-status-dot {
 }
 
 @keyframes nvgui-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%      { opacity: 0.55; transform: scale(0.82); }
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0.55; transform: scale(0.82); }
 }
 
 /* =========================================================== MINIMAL tier
