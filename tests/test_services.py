@@ -1764,6 +1764,96 @@ def test_about_dialog_close_request_signal_connectable() -> None:
 
 
 # ---------------------------------------------------------------------------
+#  #49 — DLSS version stamp from PE FileVersion
+# ---------------------------------------------------------------------------
+def test_pe_version_parser_returns_none_on_missing_file() -> None:
+    """PE version parser never raises — returns None on missing file."""
+    import pathlib
+    from nvidia_gui.adapters.pe_version import read_pe_file_version
+
+    result = read_pe_file_version(pathlib.Path("/nonexistent/dll.dll"))
+    assert result is None
+
+
+def test_dlss_fg_gated_on_version_3_5_or_higher() -> None:
+    """dlss_fg requires DLSS>=3.5 when version is known."""
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+    from nvidia_gui.domain.models import FeatureSource
+
+    det = SteamFeatureDetector(
+        resolve_install=lambda _g: None,
+        steam_root=str(Path(tempfile.mkdtemp())),
+        settings=None,
+        bundled_db=Path(tempfile.mktemp(suffix=".toml")),
+    )
+    # dlss_sr known-supported, dlssg DLL present, version 3.5 -> FG True
+    flag = det._merge_fg(
+        override=None,
+        online_fg=None,
+        bundled_fg=None,
+        dlss_sr=det._flag(True, FeatureSource.BUNDLED),
+        dlssg_install=True,
+        dlssg_prefix=False,
+        dlss_version="3.5.0.0",
+    )
+    assert flag.supported is True
+    assert flag.source == FeatureSource.INSTALLDIR
+
+
+def test_dlss_fg_false_when_version_below_3_5() -> None:
+    """dlss_fg is False when DLSS version <3.5, even with dlssg DLL present."""
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+    from nvidia_gui.domain.models import FeatureSource
+
+    det = SteamFeatureDetector(
+        resolve_install=lambda _g: None,
+        steam_root=str(Path(tempfile.mkdtemp())),
+        settings=None,
+        bundled_db=Path(tempfile.mktemp(suffix=".toml")),
+    )
+    # dlss_sr known-supported, dlssg DLL present, but version 2.5 -> FG False
+    flag = det._merge_fg(
+        override=None,
+        online_fg=None,
+        bundled_fg=None,
+        dlss_sr=det._flag(True, FeatureSource.BUNDLED),
+        dlssg_install=True,
+        dlssg_prefix=False,
+        dlss_version="2.5.0.0",
+    )
+    assert flag.supported is False
+    assert flag.source == FeatureSource.INSTALLDIR
+
+
+def test_dlss_fg_falls_back_to_dll_heuristic_when_version_unknown() -> None:
+    """dlss_fg falls back to dlssg DLL presence when version is unknown."""
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+    from nvidia_gui.domain.models import FeatureSource
+
+    det = SteamFeatureDetector(
+        resolve_install=lambda _g: None,
+        steam_root=str(Path(tempfile.mkdtemp())),
+        settings=None,
+        bundled_db=Path(tempfile.mktemp(suffix=".toml")),
+    )
+    # dlss_sr known-supported, dlssg DLL present, version unknown -> FG True (heuristic)
+    flag = det._merge_fg(
+        override=None,
+        online_fg=None,
+        bundled_fg=None,
+        dlss_sr=det._flag(True, FeatureSource.BUNDLED),
+        dlssg_install=True,
+        dlssg_prefix=False,
+        dlss_version=None,
+    )
+    assert flag.supported is True
+    assert flag.source == FeatureSource.INSTALLDIR
+
+
+# ---------------------------------------------------------------------------
 #  Plain-python runner (used when pytest isn't installed; pytest also works)
 # ---------------------------------------------------------------------------
 def _run_all() -> int:

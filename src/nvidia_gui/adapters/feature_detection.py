@@ -39,6 +39,7 @@ from ..domain.models import (
     GameCapability,
 )
 from .diagnostics import _NVAPI_DLLS
+from .pe_version import read_pe_file_version
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +130,14 @@ class SteamFeatureDetector(FeatureDetectionPort):
             notes.append("offline")
 
         # --- Tier 4: install-dir + Tier 5: prefix DLL probes ---
-        sr_install, dlssg_install = self._install_dir_probe(game, notes)
+        sr_install, dlssg_install, dlss_path = self._install_dir_probe(game, notes)
         sr_prefix, dlssg_prefix = self._prefix_probe(game, notes)
+
+        # Parse DLSS version from the first nvngx_dlss.dll we found (install-dir
+        # takes precedence over prefix). None means version unknown.
+        dlss_version = None
+        if dlss_path:
+            dlss_version = read_pe_file_version(dlss_path)
 
         # dlss_sr / reflex: strict first-hit-wins (override > online > bundled
         # > install-dir DLL > prefix DLL > UNKNOWN).
@@ -147,7 +154,7 @@ class SteamFeatureDetector(FeatureDetectionPort):
         dlss_fg = self._merge_fg(
             ov.get("dlss_fg"),
             online_flags.get("dlss_fg"), bundled_flags.get("dlss_fg"),
-            dlss_sr, dlssg_install, dlssg_prefix,
+            dlss_sr, dlssg_install, dlssg_prefix, dlss_version,
         )
         rt = self._merge_rt(
             ov.get("rt"),
@@ -165,6 +172,7 @@ class SteamFeatureDetector(FeatureDetectionPort):
             reflex=reflex,
             rt=rt,
             notes="; ".join(notes),
+            dlss_version=dlss_version,
         )
 
     # ==================================================================
@@ -294,6 +302,7 @@ class SteamFeatureDetector(FeatureDetectionPort):
         dlss_sr: FeatureFlag,
         dlssg_install: bool,
         dlssg_prefix: bool,
+        dlss_version: str | None,
     ) -> FeatureFlag:
         """dlss_fg: supported only if DLSS>=3.5 evidence exists.
 
@@ -303,9 +312,30 @@ class SteamFeatureDetector(FeatureDetectionPort):
         resolved above UNKNOWN (the spec's gate), so a curated-data False on
         dlss_sr cannot carry a True dlss_fg. Never silently True on dlss_sr
         alone.
+
+        When DLSS version is known (parsed from nvngx_dlss.dll FileVersion),
+        we gate on DLSS>=3.5 explicitly. When version is unknown, we fall back
+        to the dlssg DLL presence heuristic.
         """
         if override is not None:
             return self._flag(override, FeatureSource.OVERRIDE)
+        # Version-based gate: if we know the DLSS version, require >=3.5
+        if dlss_version:
+            major_minor = self._parse_version_major_minor(dlss_version)
+            if major_minor and major_minor >= (3, 5):
+                if dlssg_install:
+                    return self._flag(True, FeatureSource.INSTALLDIR)
+                if dlssg_prefix:
+                    return self._flag(True, FeatureSource.PREFIX)
+                sr_known = dlss_sr.source != FeatureSource.UNKNOWN and dlss_sr.supported
+                if sr_known and online_fg is True:
+                    return self._flag(True, FeatureSource.ONLINE)
+                if sr_known and bundled_fg is True:
+                    return self._flag(True, FeatureSource.BUNDLED)
+            # Version known but <3.5: no FG support
+            elif major_minor and major_minor < (3, 5):
+                return self._flag(False, FeatureSource.INSTALLDIR)
+        # Version unknown: fall back to dlssg DLL presence heuristic
         if dlssg_install:
             return self._flag(True, FeatureSource.INSTALLDIR)
         if dlssg_prefix:
@@ -322,6 +352,19 @@ class SteamFeatureDetector(FeatureDetectionPort):
         if bundled_fg is False:
             return self._flag(False, FeatureSource.BUNDLED)
         return self._flag_unknown()
+
+    @staticmethod
+    def _parse_version_major_minor(version: str) -> tuple[int, int] | None:
+        """Parse "4.1.0.0" or "v4.1" into (major, minor). Returns None on failure."""
+        # Strip leading "v" if present
+        v = version.lstrip("vV")
+        parts = v.split(".")
+        if len(parts) < 2:
+            return None
+        try:
+            return (int(parts[0]), int(parts[1]))
+        except (ValueError, IndexError):
+            return None
 
     def _merge_rt(
         self,
@@ -391,13 +434,17 @@ class SteamFeatureDetector(FeatureDetectionPort):
     # ==================================================================
     # Tier 4 -- install-dir DLL probe
     # ==================================================================
-    def _install_dir_probe(self, game: Game, notes: list[str]) -> tuple[bool, bool]:
-        """Resolve the abs install dir and return (sr_present, dlssg_present).
+    def _install_dir_probe(
+        self, game: Game, notes: list[str]
+    ) -> tuple[bool, bool, pathlib.Path | None]:
+        """Resolve the abs install dir and return (sr_present, dlssg_present, dlss_path).
 
         Never raises -- a resolution failure / unreadable dir yields (False,
-        False), and notes the failure so it is not indistinguishable from a
+        False, None), and notes the failure so it is not indistinguishable from a
         clean "no DLLs here". ``nvapi64.dll`` is noted as an nvapi hint but not
         surfaced as a feature flag (the INTEGRATION spec calls it a hint).
+        ``dlss_path`` is the absolute path to the first nvngx_dlss.dll found
+        (for version parsing); None if not found.
         """
         try:
             abs_dir = self._resolve_install(game)
@@ -406,10 +453,10 @@ class SteamFeatureDetector(FeatureDetectionPort):
                 notes.append(f"install resolve failed ({exc.__class__.__name__})")
             abs_dir = None
         if not abs_dir:
-            return False, False
+            return False, False, None
         root = pathlib.Path(abs_dir)
         if not root.is_dir():
-            return False, False
+            return False, False, None
         return self._probe_dll_tree(root)
 
     # Well-known subdirs where NVIDIA DLSS DLLs nominally live. The eager pass
@@ -426,7 +473,7 @@ class SteamFeatureDetector(FeatureDetectionPort):
         "Engine/Binaries/ThirdParty/NVIDIA",
     )
 
-    def _probe_dll_tree(self, root: pathlib.Path) -> tuple[bool, bool]:
+    def _probe_dll_tree(self, root: pathlib.Path) -> tuple[bool, bool, pathlib.Path | None]:
         """Walk a game's install tree for nvngx_dlss.dll / nvngx_dlssg.dll.
 
         Two passes: an eager pass over the well-known subdirs (where DLSS DLLs
@@ -436,8 +483,13 @@ class SteamFeatureDetector(FeatureDetectionPort):
         layout (e.g. a UE5 game with its own plugin vendoring nvngx_dlss.dll).
         Bounded: max depth 5, bulky media/archive subtrees pruned, fan-out cap,
         early-out the moment both DLL kinds are confirmed. Never raises.
+
+        Returns ``(sr_present, dlssg_present, dlss_path)`` where ``dlss_path``
+        is the absolute path to the first nvngx_dlss.dll found (for version
+        parsing), or None if not found.
         """
         sr = dlssg = False
+        dlss_path: pathlib.Path | None = None
 
         # ---- pass 1: well-known roots (the common layouts resolve here) ----
         cands = [root]
@@ -448,21 +500,22 @@ class SteamFeatureDetector(FeatureDetectionPort):
                 continue
             if not sr and (d / "nvngx_dlss.dll").is_file():
                 sr = True
+                dlss_path = d / "nvngx_dlss.dll"
             if not dlssg and (d / "nvngx_dlssg.dll").is_file():
                 dlssg = True
             if sr and dlssg:
-                return sr, dlssg
+                return sr, dlssg, dlss_path
 
         # ---- pass 2: bounded fallback walk (unlisted exotic layouts) ----
         try:
-            sr, dlssg = self._bounded_dll_walk(root, sr, dlssg)
+            sr, dlssg, dlss_path = self._bounded_dll_walk(root, sr, dlssg, dlss_path)
         except Exception:  # noqa: BLE001 -- the never-raise contract
             logger.debug("bounded dll-tree walk failed (ignored)", exc_info=True)
-        return sr, dlssg
+        return sr, dlssg, dlss_path
 
     def _bounded_dll_walk(
-        self, root: pathlib.Path, sr: bool, dlssg: bool
-    ) -> tuple[bool, bool]:
+        self, root: pathlib.Path, sr: bool, dlssg: bool, dlss_path: pathlib.Path | None
+    ) -> tuple[bool, bool, pathlib.Path | None]:
         """Bounded recursive search for DLSS DLLs, honoring never-raise.
 
         Caps runtime on big game trees (some installs exceed 50 GB with packed
@@ -498,11 +551,12 @@ class SteamFeatureDetector(FeatureDetectionPort):
                 del dirnames[:]
             if "nvngx_dlss.dll" in filenames and not sr:
                 sr = True
+                dlss_path = pathlib.Path(dirpath) / "nvngx_dlss.dll"
             if "nvngx_dlssg.dll" in filenames and not dlssg:
                 dlssg = True
             if sr and dlssg:
                 break
-        return sr, dlssg
+        return sr, dlssg, dlss_path
 
     # ==================================================================
     # Tier 5 -- prefix DLL probe

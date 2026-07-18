@@ -342,6 +342,8 @@ class GameCapability:
     Built by the :class:`~nvidia_gui.application.ports.FeatureDetectionPort`
     adapter; pure data, no I/O. ``notes`` carries a one-line provenance/warning
     (e.g. 'offline — install-dir probe only') that the UI shows under the chip.
+    ``dlss_version`` is the parsed FileVersion from nvngx_dlss.dll (e.g. "4.1.0.0")
+    when available; None means version unknown (skip version-based gating).
     """
 
     appid: str
@@ -350,6 +352,7 @@ class GameCapability:
     reflex: FeatureFlag = field(default_factory=lambda: FeatureFlag(False))
     rt: FeatureFlag = field(default_factory=lambda: FeatureFlag(False))
     notes: str = ""
+    dlss_version: str | None = None
 
     def is_known(self) -> bool:
         """True iff at least one feature resolved above the UNKNOWN tier — i.e.
