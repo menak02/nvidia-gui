@@ -63,7 +63,12 @@ def _feature_supported(cap: GameCapability, kind: str) -> bool:
 
 
 def _feature_source_label(flag: FeatureFlag) -> str:
-    """Human-readable provenance for a feature chip, e.g. 'curated'."""
+    """Human-readable provenance for a feature chip, e.g. 'curated'.
+
+    Handles the "(inferred)" suffix appended by the RT merge when RT resolves
+    via DLL-only path (nvngx_dlss.dll is a NVAPI proxy, not definitive RT
+    evidence).
+    """
     table = {
         FeatureSource.OVERRIDE: "override",
         FeatureSource.ONLINE: "community-db",
@@ -72,7 +77,12 @@ def _feature_source_label(flag: FeatureFlag) -> str:
         FeatureSource.PREFIX: "prefix",
         FeatureSource.UNKNOWN: "unknown",
     }
-    return table.get(flag.source, flag.source)
+    # Strip the "(inferred)" suffix before lookup, then re-append it if present
+    source = flag.source
+    inferred = " (inferred)" in source
+    base = source.replace(" (inferred)", "") if inferred else source
+    label = table.get(base, base)
+    return f"{label} (inferred)" if inferred else label
 
 
 def _card(title: str, subtitle: str = "") -> tuple[Gtk.Box, Gtk.Box]:

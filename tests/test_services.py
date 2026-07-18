@@ -1312,6 +1312,98 @@ def test_reflex_self_detects_from_dlssg_dll_in_install_dir() -> None:
     assert cap.is_known() is True
 
 
+# ---- #48 RT "(inferred)" provenance --------------------------------------
+# nvngx_dlss.dll is a NVAPI proxy, not definitive RT evidence. When RT resolves
+# via DLL-only path (install-dir or prefix), the source must be labelled
+# "(inferred)" so the UI is honest about weak provenance.
+def test_rt_inferred_label_from_install_dir_dll_proxy() -> None:
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    tmp = Path(tempfile.mkdtemp())
+    install = tmp / "common" / "FictionalRTGame"
+    bin64 = install / "bin" / "x64"
+    bin64.mkdir(parents=True)
+    (bin64 / "nvngx_dlss.dll").write_bytes(b"PE\x00\x00")  # NVAPI proxy
+    real_db = (Path(__file__).resolve().parent.parent / "src" / "nvidia_gui"
+               / "assets" / "nvidia_features.toml")
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda g: str(install) if g.appid == "7777777" else None,
+            steam_root=str(tmp / "steam"),
+            settings=None,
+            bundled_db=real_db,
+        )
+        g = Game(appid="7777777", name="Fictional RT Game",
+                 installdir="FictionalRTGame")
+        cap = det.probe(g)
+    assert cap.rt.supported is True, "rt must self-detect from nvngx_dlss.dll"
+    assert cap.rt.source == f"{FeatureSource.INSTALLDIR} (inferred)", (
+        f"rt source must be '{FeatureSource.INSTALLDIR} (inferred)', "
+        f"got {cap.rt.source!r}"
+    )
+
+
+def test_rt_inferred_label_from_prefix_dll_proxy() -> None:
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    tmp = Path(tempfile.mkdtemp())
+    # No install dir -- only the Proton prefix system32 has nvngx_dlss.dll
+    prefix_sys32 = (tmp / "steam" / "steamapps" / "compatdata" / "8888888"
+                    / "pfx" / "drive_c" / "windows" / "system32")
+    prefix_sys32.mkdir(parents=True)
+    (prefix_sys32 / "nvngx_dlss.dll").write_bytes(b"PE\x00\x00")
+    real_db = (Path(__file__).resolve().parent.parent / "src" / "nvidia_gui"
+               / "assets" / "nvidia_features.toml")
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda _g: None,  # no install dir
+            steam_root=str(tmp / "steam"),
+            settings=None,
+            bundled_db=real_db,
+        )
+        g = Game(appid="8888888", name="Fictional Prefix RT",
+                 installdir="FictionalPrefixRT")
+        cap = det.probe(g)
+    assert cap.rt.supported is True, "rt must self-detect from prefix dll"
+    assert cap.rt.source == f"{FeatureSource.PREFIX} (inferred)", (
+        f"rt source must be '{FeatureSource.PREFIX} (inferred)', "
+        f"got {cap.rt.source!r}"
+    )
+
+
+def test_rt_bundled_not_inferred() -> None:
+    """Sanity: when RT comes from the curated DB, source is NOT inferred."""
+    import tempfile
+    from nvidia_gui.adapters.feature_detection import SteamFeatureDetector
+
+    tmp = Path(tempfile.mkdtemp())
+    install = tmp / "common" / "CuratedRT"
+    install.mkdir(parents=True)  # empty install dir -- no DLLs
+    # Write a custom bundled DB with rt=true for this appid
+    custom_db = tmp / "nvidia_features.toml"
+    custom_db.write_text(
+        '[[games]]\nappid = "9999999"\nrt = true\n',
+        encoding="utf-8",
+    )
+    with mock.patch.object(_fd_mod, "_FEATURE_DB_URL", ""):
+        det = SteamFeatureDetector(
+            resolve_install=lambda g: str(install) if g.appid == "9999999" else None,
+            steam_root=str(tmp / "steam"),
+            settings=None,
+            bundled_db=custom_db,
+        )
+        g = Game(appid="9999999", name="Curated RT", installdir="CuratedRT")
+        cap = det.probe(g)
+    assert cap.rt.supported is True
+    assert cap.rt.source == FeatureSource.BUNDLED, (
+        f"rt from curated DB must be '{FeatureSource.BUNDLED}', "
+        f"got {cap.rt.source!r} (no '(inferred)' suffix)"
+    )
+    assert "inferred" not in cap.rt.source
+
+
 # ---- umbrella 5: ACF PARSER breadth across the game_corpus fixtures -------
 def test_acf_parser_breadth_multi_library_and_broken_manifest() -> None:
     import shutil

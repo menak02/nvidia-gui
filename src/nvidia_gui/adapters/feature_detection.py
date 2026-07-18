@@ -337,6 +337,10 @@ class SteamFeatureDetector(FeatureDetectionPort):
         probe) OR an online/bundled rt=True all qualify. A DB False is a known
         negative (reported above UNKNOWN so the UI desaturates honestly), but a
         DLL present still wins as positive evidence. Override always wins.
+
+        When RT resolves via DLL-only path (nvngx_dlss.dll in install-dir or
+        prefix), the source is labelled "(inferred)" because that DLL is a NVAPI
+        proxy, not definitive RT evidence -- honest about weak provenance.
         """
         if override is not None:
             return self._flag(override, FeatureSource.OVERRIDE)
@@ -345,9 +349,9 @@ class SteamFeatureDetector(FeatureDetectionPort):
         if bundled_rt is True:
             return self._flag(True, FeatureSource.BUNDLED)
         if sr_install:
-            return self._flag(True, FeatureSource.INSTALLDIR)
+            return self._flag(True, f"{FeatureSource.INSTALLDIR} (inferred)")
         if sr_prefix:
-            return self._flag(True, FeatureSource.PREFIX)
+            return self._flag(True, f"{FeatureSource.PREFIX} (inferred)")
         if online_rt is False:
             return self._flag(False, FeatureSource.ONLINE)
         if bundled_rt is False:
