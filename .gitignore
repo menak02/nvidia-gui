@@ -26,3 +26,6 @@ HANDOFF.md
 *.swo
 *~
 .DS_Store
+
+# --- AI Agents / Skills configuration (local only) ---
+.agents/

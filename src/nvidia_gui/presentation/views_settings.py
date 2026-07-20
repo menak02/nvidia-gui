@@ -50,6 +50,7 @@ def _card(title: str, subtitle: str = "") -> tuple[Gtk.Box, Gtk.Box]:
     """
     card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     card.add_css_class("nvgui-card")
+    card.set_hexpand(True)
     head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     head.add_css_class("nvgui-card-header")
     head.set_hexpand(True)
@@ -64,8 +65,10 @@ def _card(title: str, subtitle: str = "") -> tuple[Gtk.Box, Gtk.Box]:
     if subtitle:
         s = Gtk.Label(label=subtitle, xalign=0, wrap=True)
         s.add_css_class("nvgui-card-subtle")
+        s.set_hexpand(True)
         card.append(s)
     body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+    body.set_hexpand(True)
     card.append(body)
     return card, body
 
@@ -112,7 +115,11 @@ def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
     """Local mirror of ``views._scrolled``: same margins + spacing for parity."""
     sw = Gtk.ScrolledWindow()
     sw.set_vexpand(True)
+    sw.set_hexpand(True)
+    child.set_hexpand(True)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    box.set_hexpand(True)
+    box.set_vexpand(True)
     box.set_margin_top(20)
     box.set_margin_bottom(20)
     box.set_margin_start(20)

@@ -9,7 +9,8 @@ import time
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio, GLib, Gtk  # noqa: E402
+gi.require_version("Pango", "1.0")
+from gi.repository import Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .icons import icon  # noqa: E402
 from .views import (  # noqa: E402
@@ -94,6 +95,8 @@ class MainWindow(Gtk.ApplicationWindow):
             uc.setting("window.width", 1180),
             uc.setting("window.height", 760),
         )
+        # Minimum size request floor allows tiling window managers to scale down
+        self.set_size_request(480, 400)
         self.add_css_class("nvidia-gui-window")
         # Animations tier — scope the motion rules on the ROOT window. Called
         # once on boot from the saved preference, and again whenever the
@@ -141,6 +144,7 @@ class MainWindow(Gtk.ApplicationWindow):
         title_box.append(Gtk.Label(label=""))
         self._live_label = Gtk.Label(label="", xalign=1)
         self._live_label.add_css_class("nvgui-card-subtle")
+        self._live_label.set_ellipsize(Pango.EllipsizeMode.END)
         title_box.append(self._live_label)
         topbar.append(title_box)
 
@@ -148,6 +152,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.sidebar = NavSidebar()
         self.sidebar.set_size_request(-1, -1)  # Naturally scale to content (fit-content)
         self.sidebar.set_hexpand(False)
+        self.sidebar.set_vexpand(True)
         self.sidebar.set_halign(Gtk.Align.START)
 
         self.stack = Gtk.Stack()
@@ -211,10 +216,14 @@ class MainWindow(Gtk.ApplicationWindow):
         # ---- assemble flex container ---------------------------------
         # The split box matches display: flex; flex-direction: row
         self._split_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self._split_box.set_hexpand(True)
+        self._split_box.set_vexpand(True)
         self._split_box.append(self.sidebar)
         self._split_box.append(self.stack)
 
         main = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        main.set_hexpand(True)
+        main.set_vexpand(True)
         main.append(topbar)
         sep = Gtk.Separator()
         main.append(sep)
@@ -278,6 +287,19 @@ class MainWindow(Gtk.ApplicationWindow):
             if cls.startswith("nvgui-motion-"):
                 self.remove_css_class(cls)
         self.add_css_class(f"nvgui-motion-{tier}")
+        
+        # Update Gtk.Stack transition behavior dynamically based on motion tier
+        stack = getattr(self, "stack", None)
+        if stack is not None:
+            if tier == "off":
+                stack.set_transition_type(Gtk.StackTransitionType.NONE)
+            elif tier == "minimal":
+                stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
+                stack.set_transition_duration(60)
+            else:
+                stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+                stack.set_transition_duration(200)
+
         # Re-scope the save toast to the new tier (guarded: the boot call at
         # __init__ runs before self.toast is constructed).
         toast = getattr(self, "toast", None)
@@ -407,24 +429,8 @@ class MainWindow(Gtk.ApplicationWindow):
             popover.popdown()
 
     def _on_toggle_sidebar(self, chk) -> None:
-        start = self._paned.get_start_child()
-        if start is None:
-            return
-        if chk.get_active():
-            start.set_visible(True)
-            self._paned.set_position(self._sidebar_w or 220)
-        else:
-            # remember the current width so un-checking restores it, not 220
-            self._sidebar_w = self._paned.get_position()
-            start.set_visible(False)
+        self.sidebar.set_visible(chk.get_active())
 
-    def _on_paned_position(self, _paned, _pspec) -> None:
-        # Clamp to a usable rail range; persist once the drag settles (the
-        # Debouncer coalesces the continuous notify::position burst).
-        self._sidebar_w = max(160, min(420, self._paned.get_position()))
-        self._paned_deb.schedule(
-            lambda: self.uc.set_setting("window.sidebar_width", self._sidebar_w)
-        )
 
     def _initial_load(self) -> bool:
         """Populate the heavier views once, on the first idle tick."""

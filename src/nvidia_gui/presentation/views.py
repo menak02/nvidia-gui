@@ -9,6 +9,7 @@ set up by the main window.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Callable, TYPE_CHECKING
 
@@ -89,6 +90,7 @@ def _card(title: str, subtitle: str = "") -> tuple[Gtk.Box, Gtk.Box]:
     """Return (card, body) so callers append rows to body."""
     card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     card.add_css_class("nvgui-card")
+    card.set_hexpand(True)
     head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
     head.add_css_class("nvgui-card-header")
     head.set_hexpand(True)
@@ -101,8 +103,10 @@ def _card(title: str, subtitle: str = "") -> tuple[Gtk.Box, Gtk.Box]:
     if subtitle:
         s = Gtk.Label(label=subtitle, xalign=0, wrap=True)
         s.add_css_class("nvgui-card-subtle")
+        s.set_hexpand(True)
         card.append(s)
     body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+    body.set_hexpand(True)
     card.append(body)
     return card, body
 
@@ -159,7 +163,11 @@ def _page_header(title_text: str, extra_widgets: list[Gtk.Widget] | None = None)
 def _scrolled(child: Gtk.Widget) -> Gtk.ScrolledWindow:
     sw = Gtk.ScrolledWindow()
     sw.set_vexpand(True)
+    sw.set_hexpand(True)
+    child.set_hexpand(True)
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+    box.set_hexpand(True)
+    box.set_vexpand(True)
     box.set_margin_top(20); box.set_margin_bottom(20)
     box.set_margin_start(20); box.set_margin_end(20)
     box.append(child)
@@ -266,13 +274,16 @@ class DashboardView:
                            "Polled from nvidia-smi on a background thread.")
         body.append(self._graph)
 
-        # 3x2 Telemetry Grid
-        grid = Gtk.Grid()
-        grid.set_row_spacing(10)
-        grid.set_column_spacing(10)
-        grid.set_row_homogeneous(True)
-        grid.set_column_homogeneous(True)
-        grid.set_margin_top(14)
+        # Telemetry FlowBox (Responsive wrapping)
+        flow = Gtk.FlowBox()
+        flow.set_valign(Gtk.Align.START)
+        flow.set_max_children_per_line(3)
+        flow.set_min_children_per_line(1)
+        flow.set_selection_mode(Gtk.SelectionMode.NONE)
+        flow.set_column_spacing(10)
+        flow.set_row_spacing(10)
+        flow.set_homogeneous(True)
+        flow.set_margin_top(14)
 
         temp_tile, self._fields["temp_lbl"] = _metric_tile("Temperature")
         util_tile, self._fields["util_lbl"] = _metric_tile("GPU Util")
@@ -281,14 +292,14 @@ class DashboardView:
         mem_tile, self._fields["mem_lbl"] = _metric_tile("VRAM Memory")
         fan_tile, self._fields["fan_lbl"] = _metric_tile("Fan Speed")
 
-        grid.attach(temp_tile, 0, 0, 1, 1)
-        grid.attach(util_tile, 1, 0, 1, 1)
-        grid.attach(power_tile, 2, 0, 1, 1)
-        grid.attach(clocks_tile, 0, 1, 1, 1)
-        grid.attach(mem_tile, 1, 1, 1, 1)
-        grid.attach(fan_tile, 2, 1, 1, 1)
+        flow.append(temp_tile)
+        flow.append(util_tile)
+        flow.append(power_tile)
+        flow.append(clocks_tile)
+        flow.append(mem_tile)
+        flow.append(fan_tile)
 
-        body.append(grid)
+        body.append(flow)
         self._root.append(card)
 
         # quick actions — fetch Streamline from GitHub (no local SDK needed)
@@ -429,13 +440,16 @@ class GamesView:
         # A real Gtk.Paned replaces the old homogeneous Gtk.Box: the divider is
         # draggable and there is NO hard floor - the list minimum is set below.
         # Paned draws its own handle, so the manual Gtk.Separator is gone.
-        self._paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
-        self._paned.set_shrink_start_child(False)
-        self._paned.set_shrink_end_child(False)
+        # A Gtk.Box replaces the old Gtk.Paned to allow a responsive drawer-style layout.
+        # The list panel will be togglable to handle narrow windows better.
+        self._split_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self._split_box.set_hexpand(True)
+        self._split_box.set_vexpand(True)
         self._list_deb = Debouncer(400)
-        # left: list column — 330px minimum so game names + badges never squish
+        # left: list column — 220px minimum request so game names + badges fit cleanly
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        left.set_size_request(330, -1)
+        left.set_size_request(220, -1)
+        left.set_vexpand(True)
         scan = Gtk.Button(label="Scan")
         scan.add_css_class("nvgui-btn-ghost")
         scan.set_tooltip_text("Re-scan the Steam library for installed games")
@@ -454,12 +468,13 @@ class GamesView:
         sw.set_vexpand(True)
         sw.set_child(self._listbox)
         left.append(sw)
-        # right: detail panel — scrollable; inner box capped at 780px so controls
-        # and their labels stay close even on ultrawide monitors.
+        # right: detail panel — scrollable; inner box expands dynamically
         rsw = Gtk.ScrolledWindow()
         rsw.set_vexpand(True)
         rsw.set_hexpand(True)
         rpad = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        rpad.set_hexpand(True)
+        rpad.set_vexpand(True)
         rpad.set_margin_start(20)
         rpad.set_margin_end(20)
         rpad.set_margin_top(20)
@@ -467,28 +482,53 @@ class GamesView:
         self._detail.set_size_request(-1, -1)   # let it grow naturally
         self._detail.set_hexpand(True)
         rpad.set_halign(Gtk.Align.FILL)
-        # Constrain the inner content to a readable max width
+        # Persistent toggle button and title header for the details panel
+        detail_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        detail_header.set_margin_bottom(12)
+        
+        toggle_btn = Gtk.ToggleButton()
+        toggle_btn.set_icon_name("view-list-symbolic")
+        toggle_btn.set_active(True)
+        # Tooltip removed to prevent it from overlapping with the title area
+        toggle_btn.set_valign(Gtk.Align.START)
+        toggle_btn.connect("toggled", lambda btn: left.set_visible(btn.get_active()))
+        
+        detail_header.append(toggle_btn)
+
+        self._title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._title_lbl = Gtk.Label(label="")
+        self._title_lbl.add_css_class("nvgui-card-title")
+        self._title_lbl.set_xalign(0)
+        self._sub_lbl = Gtk.Label(label="")
+        self._sub_lbl.add_css_class("nvgui-card-subtle")
+        self._sub_lbl.set_xalign(0)
+        
+        self._title_box.append(self._title_lbl)
+        self._title_box.append(self._sub_lbl)
+        detail_header.append(self._title_box)
+
+        rpad.append(detail_header)
+
+        # Content expands dynamically across available space
         inner_clamp = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        inner_clamp.set_halign(Gtk.Align.START)
-        inner_clamp.set_size_request(0, -1)
+        inner_clamp.set_halign(Gtk.Align.FILL)
         inner_clamp.set_hexpand(True)
         inner_clamp.append(self._detail)
         rpad.append(inner_clamp)
         rsw.set_child(rpad)
-        self._paned.set_start_child(left)
-        self._paned.set_end_child(rsw)
-        self._paned.set_position(self.uc.setting("games.list_width", 340))
-        self._paned.connect("notify::position", self._on_list_paned_position)
-        self._root = self._paned
+        
+        self._split_box.append(left)
+        self._split_box.append(rsw)
+        self._root = self._split_box
         self._listbox.connect("row-selected", self._on_select)
         self._show_empty_state()
 
-    def _on_list_paned_position(self, _paned, _pspec) -> None:
-        pos = max(180, min(480, self._paned.get_position()))
-        self._list_deb.schedule(lambda: self.uc.set_setting("games.list_width", pos))
+
 
     def _show_empty_state(self) -> None:
         self._clear_detail()
+        self._title_lbl.set_text("")
+        self._sub_lbl.set_text("")
         hint = Gtk.Label(label="Select a game to edit its per-game profile.")
         hint.add_css_class("nvgui-muted")
         self._detail.append(hint)
@@ -784,11 +824,9 @@ class GamesView:
     def _build_editor(self, game: Game) -> None:
         self._clear_detail()
         p = self.uc.get_profile(game.appid)
-        title = Gtk.Label(label=game.name); title.add_css_class("nvgui-card-title")
-        title.set_xalign(0); self._detail.append(title)
-        sub = Gtk.Label(label=f"{game.appid} · {game.installdir}")
-        sub.add_css_class("nvgui-card-subtle"); sub.set_xalign(0)
-        self._detail.append(sub)
+        
+        self._title_lbl.set_text(game.name)
+        self._sub_lbl.set_text(f"{game.appid} · {game.installdir}")
 
         # widgets consumed on save
         self._ed: dict = {}
@@ -1492,13 +1530,17 @@ class DisplayView:
         if self.uc.is_color_available():
             displays = self.uc.detect_color_displays()
             if displays:
-                cc, cb = _card(
-                    "Digital Color (Brightness & Contrast)",
+                is_hyprland = "hyprland" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower() or "HYPRLAND_INSTANCE_SIGNATURE" in os.environ
+                note = (
                     "Configure digital brightness and contrast per output. "
-                    "Range: 0.1 to 3.0 (1.0 is default hardware level). "
-                    "(Note: On Hyprland, sliding these triggers a compositor screen-shader reload "
-                    "which causes a brief window flicker. Updates are debounced to minimize this)."
+                    "Range: 0.1 to 3.0 (1.0 is default hardware level)."
                 )
+                if is_hyprland:
+                    note += (
+                        " (Note: On Hyprland, sliding these triggers a compositor screen-shader reload "
+                        "which causes a brief window flicker. Updates are debounced to minimize this)."
+                    )
+                cc, cb = _card("Digital Color (Brightness & Contrast)", note)
 
                 has_connected_color = False
                 for d in displays:

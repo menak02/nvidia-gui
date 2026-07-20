@@ -13,7 +13,8 @@ import logging
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import GLib, GObject, Gtk  # noqa: E402
+gi.require_version("Pango", "1.0")
+from gi.repository import GLib, GObject, Gtk, Pango  # noqa: E402
 
 from .icons import icon
 
@@ -38,6 +39,7 @@ class StatGraph(Gtk.DrawingArea):
         self._max = max_samples
         self.set_content_width(300)
         self.set_content_height(78)
+        self.set_hexpand(True)
         self.add_css_class("nvgui-card")
         self.set_draw_func(self._draw, None)
 
@@ -96,14 +98,17 @@ class ToggleRow(Gtk.Box):
 
     def __init__(self, label: str, subtitle: str = "", active: bool = False) -> None:
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.set_hexpand(True)
         self.set_homogeneous(False)
         left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         left.set_hexpand(True)
         l = Gtk.Label(label=label, xalign=0)
         l.add_css_class("nvgui-row-label")
+        l.set_hexpand(True)
         left.append(l)
         if subtitle:
             s = Gtk.Label(label=subtitle, xalign=0, wrap=True)
+            s.set_hexpand(True)
             if subtitle.startswith("DXVK_") or subtitle.startswith("PROTON_") or subtitle.startswith("VKD3D_"):
                 s.add_css_class("nvgui-env-var")
             else:
@@ -141,11 +146,14 @@ class TextRow(Gtk.Box):
 
     def __init__(self, key: str, value: str = "", accent: bool = False) -> None:
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.set_hexpand(True)
         k = Gtk.Label(label=key, xalign=0)
         k.add_css_class("nvgui-row-label")
         k.set_size_request(120, -1)  # fixed key width — prevents value jumping
         v = Gtk.Label(label=value or "—", xalign=0)
         v.add_css_class("nvgui-row-value")
+        v.set_hexpand(True)
+        v.set_wrap(True)
         if accent:
             v.add_css_class("accent")
         self.append(k)
@@ -387,6 +395,7 @@ class StatusBar(Gtk.Box):
         self._status = Gtk.Label(label="")
         self._status.set_hexpand(True)
         self._status.set_xalign(0)
+        self._status.set_ellipsize(Pango.EllipsizeMode.END)
         self._status.add_css_class("nvgui-status-label")
         self.append(self._status)
 
